@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>용돈 퀘스트 | FamilyQuest</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Pretendard Variable", Pretendard, system-ui, sans-serif;
+      background: #F0F4FF;
+      color: #0F172A;
+      -webkit-font-smoothing: antialiased;
+      user-select: none; -webkit-user-select: none;
+    }
+    .safe-top    { padding-top:    max(env(safe-area-inset-top), 12px); }
+    .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 16px); }
+    .content-area { padding-bottom: calc(max(env(safe-area-inset-bottom), 16px) + 72px); }
+
+    /* Glass nav */
+    .glass-top  { background: rgba(255,255,255,0.88); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom: 0.5px solid rgba(0,0,0,0.08); }
+    .glass-bot  { background: rgba(255,255,255,0.94); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border-top: 0.5px solid rgba(0,0,0,0.10); }
+
+    /* Cards */
+    .card { background: #fff; border-radius: 20px; border: 1px solid rgba(226,232,240,0.8); box-shadow: 0 1px 4px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04); }
+
+    /* Tap feedback */
+    .tap { transition: transform .12s ease, opacity .12s ease; cursor: pointer; }
+    .tap:active { transform: scale(0.96); opacity: 0.82; }
+
+    /* Tab item */
+    .tab-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 0; color: #94A3B8; transition: color .2s; }
+    .tab-item.active { color: #4F46E5; }
+    .tab-item .tab-label { font-size: 10px; font-weight: 700; margin-top: 2px; }
+
+    /* Segmented control */
+    .seg-ctrl { display: flex; background: #EFF1F5; border-radius: 12px; padding: 3px; gap: 2px; }
+    .seg-btn  { flex: 1; padding: 7px 0; font-size: 12px; font-weight: 600; text-align: center; border-radius: 9px; color: #64748B; transition: all .2s; }
+    .seg-btn.active { background: #fff; color: #1E293B; box-shadow: 0 2px 5px rgba(0,0,0,0.10); }
+
+    /* Modal / Bottom sheet */
+    .modal-bg  { position: fixed; inset: 0; z-index: 50; background: rgba(15,23,42,0.55); backdrop-filter: blur(4px); display: flex; align-items: flex-end; justify-content: center; }
+    .modal-bg.center { align-items: center; padding: 20px; }
+    .sheet { border-radius: 24px 24px 0 0; background: #fff; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; transform: translateY(100%); transition: transform .3s cubic-bezier(.16,1,.3,1); }
+    .sheet.open { transform: translateY(0); }
+    .grabber { width: 38px; height: 4px; background: #CBD5E1; border-radius: 2px; margin: 10px auto 4px; }
+    .sheet-center { border-radius: 20px; background: #fff; width: 100%; max-width: 340px; }
+
+    /* Status badges */
+    .badge-pending  { background: #FEF3C7; color: #92400E; }
+    .badge-approved { background: #D1FAE5; color: #065F46; }
+    .badge-rejected { background: #FEE2E2; color: #991B1B; }
+    .badge-active   { background: #DBEAFE; color: #1E40AF; }
+    .badge-used     { background: #F1F5F9; color: #64748B; }
+
+    /* Photo grid */
+    .photo-slot { aspect-ratio: 1; border-radius: 14px; overflow: hidden; border: 1.5px solid #E2E8F0; background: #F8FAFC; position: relative; }
+    .photo-slot img { width: 100%; height: 100%; object-fit: cover; }
+
+    /* Loading spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; }
+
+    /* Progress bar fill */
+    .progress-fill { transition: width .8s cubic-bezier(.16,1,.3,1); }
+
+    /* Hide scrollbar */
+    ::-webkit-scrollbar { display: none; }
+    * { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="min-h-screen antialiased">
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- 🔝 Top Header                         -->
+  <!-- ══════════════════════════════════════ -->
+  <header class="glass-top fixed top-0 left-0 right-0 z-30 safe-top">
+    <div class="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🏰</span>
+        <span class="font-black text-sm tracking-tight text-slate-900">우리 가족 용돈 퀘스트</span>
+      </div>
+      <button type="button" onclick="openProfileModal()" class="tap flex items-center gap-1.5 bg-white/90 border border-slate-200 px-3 py-1.5 rounded-full text-xs font-bold text-slate-700 shadow-sm">
+        <span id="hdr-avatar">🧒</span>
+        <span id="hdr-name">우리 아이</span>
+        <span class="text-slate-400 text-[9px]">▼</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- 📱 Main Content                       -->
+  <!-- ══════════════════════════════════════ -->
+  <main class="max-w-md mx-auto w-full px-4 pt-20 content-area space-y-0">
+
+    <!-- ── TAB: 퀘스트 ────────────────── -->
+    <div id="view-quests" class="tab-view space-y-4 py-4">
+
+      <!-- Hero Card -->
+      <div class="card p-5 bg-gradient-to-br from-indigo-800 via-indigo-900 to-slate-900 text-white relative overflow-hidden shadow-xl">
+        <div class="absolute -right-8 -top-8 w-40 h-40 bg-indigo-400/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -left-4 bottom-0 w-28 h-28 bg-violet-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="bg-amber-400/20 border border-amber-400/30 text-amber-300 text-xs font-black px-2.5 py-1 rounded-lg">
+              👑 Lv.<span id="hero-lv">3</span>
+            </span>
+            <span id="hero-title" class="text-xs font-bold text-indigo-200">⭐ 든든한 퀘스트 챔피언</span>
+          </div>
+          <span id="pending-dot" class="hidden text-[11px] font-bold text-amber-300 bg-amber-400/20 border border-amber-400/30 px-2 py-0.5 rounded-full">⏳ 심의 대기</span>
+        </div>
+
+        <!-- XP Progress -->
+        <div class="bg-white/10 rounded-2xl p-3.5 mb-3 border border-white/10">
+          <div class="flex items-center justify-between text-xs font-bold mb-2">
+            <span class="text-slate-300">🎯 최종 목표: <strong id="hero-target" class="text-white">플레이스테이션</strong></span>
+            <span id="hero-xp-text" class="text-indigo-300 font-black">7,400 / 100,000 XP</span>
+          </div>
+          <div class="w-full bg-slate-800/80 rounded-full h-2.5 overflow-hidden border border-white/10">
+            <div id="hero-bar" class="progress-fill bg-gradient-to-r from-amber-400 to-violet-400 h-full rounded-full" style="width:8%"></div>
+          </div>
+        </div>
+
+        <!-- Stats Row -->
+        <div class="grid grid-cols-2 gap-2">
+          <div class="bg-white/10 rounded-xl p-2.5 text-center border border-white/5">
+            <p class="text-[11px] text-slate-400 font-medium mb-0.5">총 획득 경험치</p>
+            <p id="hero-total-xp" class="text-base font-black text-amber-300">7,400 XP</p>
+          </div>
+          <div class="bg-white/10 rounded-xl p-2.5 text-center border border-white/5">
+            <p class="text-[11px] text-slate-400 font-medium mb-0.5">사용 가능 포인트</p>
+            <p id="hero-balance" class="text-base font-black text-emerald-300">7,400 P</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Category Filter -->
+      <div class="seg-ctrl">
+        <button type="button" onclick="filterQuests('ALL',this)" class="seg-btn active">전체</button>
+        <button type="button" onclick="filterQuests('일일',this)" class="seg-btn">일일</button>
+        <button type="button" onclick="filterQuests('주간',this)" class="seg-btn">주간</button>
+        <button type="button" onclick="filterQuests('특별',this)" class="seg-btn">특별</button>
+      </div>
+
+      <!-- Quest List -->
+      <div id="quest-list" class="space-y-2.5"></div>
+    </div>
+
+    <!-- ── TAB: 상점 ───────────────────── -->
+    <div id="view-shop" class="tab-view hidden space-y-4 py-4">
+      <div class="card p-5 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg">
+        <div class="flex justify-between items-center">
+          <div>
+            <h2 class="text-base font-black">🎁 용돈 & 보상 상점</h2>
+            <p class="text-xs text-amber-100 mt-0.5">열심히 모은 포인트로 보상을 획득하세요!</p>
+          </div>
+          <div class="text-right">
+            <p class="text-[10px] font-bold text-amber-200">현재 잔액</p>
+            <p id="shop-balance" class="text-lg font-black">7,400 P</p>
+          </div>
+        </div>
+      </div>
+      <div id="shop-list" class="space-y-2.5"></div>
+    </div>
+
+    <!-- ── TAB: 인벤토리 ──────────────── -->
+    <div id="view-inv" class="tab-view hidden space-y-4 py-4">
+      <div class="card p-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-black text-slate-900">🎒 내 인벤토리</h2>
+          <p class="text-xs text-slate-500 mt-0.5">획득한 보상과 쿠폰을 관리해요</p>
+        </div>
+        <span id="inv-badge" class="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full">0개</span>
+      </div>
+      <div id="inv-list" class="space-y-2.5"></div>
+    </div>
+
+    <!-- ── TAB: 활동일지 ──────────────── -->
+    <div id="view-history" class="tab-view hidden space-y-4 py-4">
+      <div class="card p-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-sm font-black text-slate-900">📜 퀘스트 수행 & 심의 기록</h2>
+          <p class="text-xs text-slate-500 mt-0.5">인증 사진과 부모님 코멘트 기록</p>
+        </div>
+        <span id="history-badge" class="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full">0건</span>
+      </div>
+      <div id="history-list" class="space-y-3"></div>
+      <!-- Pagination -->
+      <div id="history-pagination" class="flex items-center justify-between pb-4 px-1 hidden">
+        <button type="button" id="hist-prev" onclick="changeHistPage(-1)" class="tap px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold shadow-sm">◀ 이전</button>
+        <span id="hist-page-info" class="text-xs font-bold text-slate-600">1 / 1</span>
+        <button type="button" id="hist-next" onclick="changeHistPage(1)" class="tap px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold shadow-sm">다음 ▶</button>
+      </div>
+    </div>
+
+    <!-- ── TAB: 승인 (부모) ───────────── -->
+    <div id="view-approve" class="tab-view hidden space-y-4 py-4">
+      <div class="card p-5 border-l-4 border-amber-500">
+        <h2 class="text-sm font-black text-slate-900 flex items-center gap-2"><span class="text-xl">⚖️</span>부모님 심의 & 칭찬 센터</h2>
+        <p class="text-xs text-slate-500 mt-1 leading-relaxed">아이가 완료 제출한 퀘스트를 검토하고, 따뜻한 칭찬 한마디와 함께 포인트를 승인해 주세요!</p>
+      </div>
+      <div id="approve-list" class="space-y-3"></div>
+    </div>
+
+  </main>
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- 🔽 Bottom Tab Bar                     -->
+  <!-- ══════════════════════════════════════ -->
+  <nav class="glass-bot fixed bottom-0 left-0 right-0 z-30 safe-bottom">
+    <div class="max-w-md mx-auto flex items-center h-[58px]">
+      <button type="button" onclick="switchTab('quests')" id="tab-quests" class="tab-item active">
+        <span class="text-[22px]">⚡</span>
+        <span class="tab-label">퀘스트</span>
+      </button>
+      <button type="button" onclick="switchTab('shop')" id="tab-shop" class="tab-item">
+        <span class="text-[22px]">🎁</span>
+        <span class="tab-label">상점</span>
+      </button>
+      <button type="button" onclick="switchTab('inv')" id="tab-inv" class="tab-item">
+        <span class="text-[22px]">🎒</span>
+        <span class="tab-label">인벤토리</span>
+      </button>
+      <button type="button" onclick="switchTab('history')" id="tab-history" class="tab-item">
+        <span class="text-[22px]">📜</span>
+        <span class="tab-label">활동일지</span>
+      </button>
+      <button type="button" onclick="onApproveTabClick()" id="tab-approve" class="tab-item relative">
+        <span class="text-[22px]">⚖️</span>
+        <span class="tab-label">승인</span>
+        <span id="approve-dot" class="hidden absolute top-1.5 right-5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- 📥 Quest Submission Modal             -->
+  <!-- ══════════════════════════════════════ -->
+  <div id="quest-modal" class="modal-bg hidden" onclick="if(event.target===this)closeQuestModal()">
+    <div id="quest-sheet" class="sheet">
+      <div class="grabber"></div>
+      <div class="px-6 pb-6 space-y-4">
+        <!-- Header -->
+        <div class="flex items-start justify-between">
+          <div class="flex-1 min-w-0 pr-3">
+            <span id="qm-cat" class="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md">일일</span>
+            <h3 id="qm-title" class="text-lg font-black text-slate-900 mt-1">퀘스트 제목</h3>
+            <p id="qm-desc" class="text-xs text-slate-500 mt-0.5 leading-relaxed"></p>
+          </div>
+          <span id="qm-pts" class="text-base font-black text-indigo-600 flex-shrink-0">+300 P</span>
+        </div>
+
+        <!-- Photo Upload (2~3장) -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-slate-700">📸 인증 사진 첨부 <span class="text-red-500">*</span></label>
+            <span id="photo-count" class="text-[11px] font-semibold text-slate-400">0 / 3장</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed -mt-1">최소 2장, 최대 3장 업로드해주세요.</p>
+          <div id="photo-grid" class="grid grid-cols-3 gap-2">
+            <!-- JS render -->
+          </div>
+          <!-- Validation hint -->
+          <p id="photo-hint" class="text-[11px] text-red-500 font-semibold hidden">📸 사진을 2장 이상 첨부해주세요.</p>
+        </div>
+
+        <!-- Memo -->
+        <div class="space-y-1.5">
+          <label class="text-xs font-bold text-slate-700">💬 소감 (선택)</label>
+          <textarea id="qm-memo" rows="2" placeholder="퀘스트를 완료하고 느낀 점을 적어봐요!" class="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50 resize-none"></textarea>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex gap-2 pt-1">
+          <button type="button" onclick="closeQuestModal()" class="tap flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold">취소</button>
+          <button type="button" id="qm-submit-btn" onclick="submitQuestAction()" class="tap flex-1 py-3 bg-indigo-600 text-white rounded-xl text-sm font-extrabold shadow-md shadow-indigo-600/25 flex items-center justify-center gap-1.5">
+            완료 제출하기 🚀
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- 🔐 PIN Modal                          -->
+  <!-- ══════════════════════════════════════ -->
+  <div id="pin-modal" class="modal-bg center hidden" onclick="if(event.target===this)closePinModal()">
+    <div class="sheet-center p-6 space-y-4 text-center">
+      <div class="text-4xl">🔐</div>
+      <h3 class="text-base font-black text-slate-900">부모님 인증 PIN</h3>
+      <p class="text-xs text-slate-500">부모님 전용 모드입니다. PIN 번호 4자리를 입력해 주세요.</p>
+      <div id="pin-name-row" class="flex gap-2 justify-center">
+        <button type="button" onclick="setPinTarget('mom')" id="pin-btn-mom" class="tap flex-1 py-2 rounded-xl border-2 border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold">👩 엄마</button>
+        <button type="button" onclick="setPinTarget('dad')" id="pin-btn-dad" class="tap flex-1 py-2 rounded-xl border border-slate-200 text-slate-500 text-xs font-bold">👨 아빠</button>
+      </div>
+      <input type="password" id="pin-input" maxlength="4" placeholder="••••" class="w-full text-center tracking-[0.5em] text-2xl font-black py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50">
+      <p id="pin-error" class="text-xs text-red-500 font-bold hidden">PIN 번호가 일치하지 않습니다.</p>
+      <div class="flex gap-2">
+        <button type="button" onclick="closePinModal()" class="tap flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold">닫기</button>
+        <button type="button" onclick="verifyPin()" class="tap flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- 👤 Profile Modal                      -->
+  <!-- ══════════════════════════════════════ -->
+  <div id="profile-modal" class="modal-bg hidden" onclick="if(event.target===this)closeProfileModal()">
+    <div id="profile-sheet" class="sheet">
+      <div class="grabber"></div>
+      <div class="px-6 pb-6 space-y-3">
+        <h3 class="text-sm font-black text-slate-900 mb-1">사용자 프로필 선택</h3>
+        <div id="profile-list" class="space-y-2"></div>
+        <button type="button" onclick="openApiConfigModal()" class="tap w-full p-3 rounded-2xl border border-dashed border-slate-300 flex items-center justify-between text-slate-600 hover:bg-slate-50 text-xs font-bold mt-1">
+          <span class="flex items-center gap-1.5"><span>⚙️</span><span>Apps Script API 주소 연동</span></span>
+          <span class="text-indigo-600">설정 ❯</span>
+        </button>
+        <button type="button" onclick="closeProfileModal()" class="tap w-full py-3 bg-slate-100 text-slate-600 rounded-xl text-sm font-bold mt-2">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- ⚙️ API Config Modal                   -->
+  <!-- ══════════════════════════════════════ -->
+  <div id="api-modal" class="modal-bg center hidden" onclick="if(event.target===this)closeApiConfigModal()">
+    <div class="sheet-center p-6 space-y-4 text-left">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">⚙️</span>
+        <h3 class="text-base font-black text-slate-900">Apps Script API 주소</h3>
+      </div>
+      <p class="text-xs text-slate-500 leading-relaxed">GitHub Pages 등 외부에서 구글 스프레드시트와 연동할 Apps Script 웹앱 배포 URL을 입력하세요.</p>
+      <input type="text" id="api-url-input" placeholder="https://script.google.com/macros/s/.../exec" class="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50 font-mono">
+      <div class="flex gap-2">
+        <button type="button" onclick="closeApiConfigModal()" class="tap flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">취소</button>
+        <button type="button" onclick="saveApiConfig()" class="tap flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold">저장 및 새로고침</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- 🖼️ Photo Viewer Modal                 -->
+  <!-- ══════════════════════════════════════ -->
+  <div id="photo-viewer" class="fixed inset-0 z-[60] bg-black/90 hidden items-center justify-center" onclick="closePhotoViewer()">
+    <img id="photo-viewer-img" src="" class="max-w-[90vw] max-h-[85vh] rounded-xl object-contain" referrerpolicy="no-referrer">
+    <button type="button" class="absolute top-6 right-6 text-white text-2xl font-black bg-white/20 w-10 h-10 rounded-full flex items-center justify-center" onclick="closePhotoViewer()">✕</button>
+  </div>
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- 💬 Toast                              -->
+  <!-- ══════════════════════════════════════ -->
+  <div id="toast" class="fixed top-20 left-1/2 -translate-x-1/2 z-[70] bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-xl opacity-0 transition-opacity duration-300 pointer-events-none whitespace-nowrap max-w-[90vw] text-center">메시지</div>
+
+  <!-- ══════════════════════════════════════ -->
+  <!-- 🧠 JavaScript Logic                   -->
+  <!-- ══════════════════════════════════════ -->
+  <script>
+  // ─── Global State & API Config ──────────────────────────────────
+  var DEFAULT_GAS_API_URL = "https://script.google.com/macros/s/AKfycbxD04vpLuIh7ujmIgxOhka0cPKtMK0lMBN8SaWaX5MKSU5AoOQRZtd4Ioc0-4SMOMbD/exec";
+  var GAS_API_URL = localStorage.getItem("FAMILY_QUEST_API_URL") || window.GAS_API_URL || DEFAULT_GAS_API_URL;
+
+  var appData = null;
+  var currentUser = { id: "child_1", name: "우리 아이", role: "CHILD", icon: "🧒" };
+  var currentTab  = "quests";
+  var questFilter = "ALL";
+  var histPage    = 1;
+  var HIST_PAGE   = 5;
+
+  var selectedQuest   = null;
+  var selectedPhotos  = []; // base64 array
+  var pinTarget       = "mom";
+  var pinAfterSuccess = null; // callback after PIN success
+
+  // ─── Universal API Caller (GAS RPC + GitHub Pages Fetch) ────────
+  function callApi(action, payload, onSuccess, onError) {
+    // 1. Google Apps Script 내부 환경
+    if (typeof google !== "undefined" && google.script && google.script.run) {
+      var runner = google.script.run
+        .withSuccessHandler(onSuccess)
+        .withFailureHandler(onError || function(err) { showToast("⚠️ 서버 오류: " + err, 3500); });
+      if (action === "getAppData") runner.getAppData();
+      else if (action === "completeQuest") runner.completeQuest(payload);
+      else if (action === "approveQuest") runner.approveQuest(payload);
+      else if (action === "rejectQuest") runner.rejectQuest(payload);
+      else if (action === "redeemReward") runner.redeemReward(payload);
+      else if (action === "useInventoryItem") runner.useInventoryItem(payload);
+      return;
+    }
+
+    // 2. GitHub Pages / 외부 브라우저 환경 (REST API)
+    var apiUrl = GAS_API_URL || localStorage.getItem("FAMILY_QUEST_API_URL") || "";
+    if (!apiUrl || apiUrl.includes("YOUR_DEPLOY_ID")) {
+      if (action === "getAppData") {
+        onSuccess(getDevFallback());
+      } else {
+        onSuccess({ success: true, message: "처리 완료 (미리보기 모드)", appData: appData });
+      }
+      return;
+    }
+
+    if (action === "getAppData") {
+      var sep = apiUrl.indexOf("?") !== -1 ? "&" : "?";
+      fetch(apiUrl + sep + "action=getAppData&t=" + Date.now())
+        .then(function(res) { return res.json(); })
+        .then(function(data) { onSuccess(data); })
+        .catch(function(err) {
+          if (onError) onError(err);
+          else { showToast("⚠️ API 통신 실패: " + err.message, 4000); onSuccess(getDevFallback()); }
+        });
+    } else {
+      fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: action, data: payload })
+      })
+        .then(function(res) { return res.json(); })
+        .then(function(data) { onSuccess(data); })
+        .catch(function(err) {
+          if (onError) onError(err);
+          else showToast("⚠️ 통신 실패: " + err.message, 4000);
+        });
+    }
+  }
+
+  // ─── Init ────────────────────────────────────────────────────────
+  window.addEventListener("DOMContentLoaded", function() {
+    renderPhotoGrid();
+    loadData();
+  });
+
+  function loadData() {
+    showToast("📡 데이터 불러오는 중...", 99999);
+    callApi("getAppData", null, function(data) {
+      if (data) { appData = data; }
+      hideToast();
+      renderAll();
+    }, function(err) {
+      hideToast();
+      showToast("⚠️ 데이터 로드 실패: " + err, 4000);
+      renderAll();
+    });
+  }
+
+  function renderAll() {
+    // DB에서 온 실제 이름/아이콘으로 currentUser 동기화
+    if (appData) {
+      var prof = appData.profiles ? appData.profiles.find(function(p) {
+        return p.id === currentUser.id || (currentUser.role === "CHILD" && p.role === "CHILD");
+      }) : null;
+      if (prof) {
+        currentUser.name = prof.name || currentUser.name;
+        currentUser.icon = prof.icon || currentUser.icon;
+      }
+    }
+    renderHeader();
+    renderQuests();
+    renderShop();
+    renderInventory();
+    renderHistory();
+    renderApprove();
+    renderProfileList();
+    updatePendingDot();
+  }
+
+  // ─── Header / Hero Card ─────────────────────────────────────────
+  function renderHeader() {
+    if (!appData) return;
+    var c = appData.child || {};
+    document.getElementById("hdr-avatar").textContent = currentUser.icon;
+    document.getElementById("hdr-name").textContent   = currentUser.name;
+
+    document.getElementById("hero-lv").textContent        = c.level || 3;
+    document.getElementById("hero-title").textContent     = c.title  || "⭐ 든든한 퀘스트 챔피언";
+    document.getElementById("hero-target").textContent    = c.targetItem || "플레이스테이션";
+    document.getElementById("hero-total-xp").textContent  = num(c.totalExp || 7400) + " XP";
+    document.getElementById("hero-balance").textContent   = num(c.currentBalance || 7400) + " P";
+    document.getElementById("shop-balance").textContent   = num(c.currentBalance || 7400) + " P";
+
+    var totalPct = Math.min(100, Math.floor(((c.totalExp || 0) / (c.targetPoints || 100000)) * 100));
+    document.getElementById("hero-xp-text").textContent  = num(c.totalExp || 7400) + " / " + num(c.targetPoints || 100000) + " XP";
+    document.getElementById("hero-bar").style.width      = Math.max(3, totalPct) + "%";
+  }
+
+  function updatePendingDot() {
+    if (!appData) return;
+    var cnt = (appData.pendingReviews || []).length;
+    var dot = document.getElementById("approve-dot");
+    var pdot = document.getElementById("pending-dot");
+    if (cnt > 0) {
+      dot.classList.remove("hidden");
+      pdot.classList.remove("hidden");
+      pdot.textContent = "⏳ 심의 대기 " + cnt + "건";
+    } else {
+      dot.classList.add("hidden");
+      pdot.classList.add("hidden");
+    }
+  }
+
+  // ─── Quests ─────────────────────────────────────────────────────
+  function normCat(raw) {
+    var s = String(raw || "").trim().toLowerCase();
+    if (s === "daily"   || s === "일일") return "일일";
+    if (s === "weekly"  || s === "주간") return "주간";
+    if (s === "special" || s === "특별" || s === "bonus") return "특별";
+    return String(raw || "").trim();
+  }
+
+  function filterQuests(cat, btn) {
+    questFilter = cat;
+    document.querySelectorAll(".seg-btn").forEach(function(b) { b.classList.remove("active"); });
+    btn.classList.add("active");
+    renderQuests();
+  }
+
+  function renderQuests() {
+    var container = document.getElementById("quest-list");
+    var quests = (appData && appData.quests) ? appData.quests : [];
+    var filtered = quests.filter(function(q) {
+      if (questFilter === "ALL") return true;
+      var cat = normCat(q.category || q.period || "일일");
+      return cat === questFilter;
+    });
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="card p-8 text-center text-slate-400"><p class="text-sm font-semibold">등록된 퀘스트가 없습니다.</p></div>';
+      return;
+    }
+
+    container.innerHTML = filtered.map(function(q) {
+      var cat = normCat(q.category || q.period || "일일");
+      var catColor = cat === "주간" ? "bg-violet-100 text-violet-700"
+                   : cat === "특별" ? "bg-rose-100 text-rose-700"
+                   : "bg-blue-100 text-blue-700";
+      return '<div onclick="openQuestModal(\'' + esc(q.id) + '\')" class="tap card p-4 flex items-center justify-between hover:border-indigo-200 transition-colors">' +
+        '<div class="flex items-center gap-3 min-w-0">' +
+          '<span class="text-2xl flex-shrink-0">' + (q.icon || "⭐") + '</span>' +
+          '<div class="min-w-0">' +
+            '<div class="flex items-center gap-1.5 flex-wrap">' +
+              '<h4 class="font-extrabold text-sm text-slate-900">' + esc(q.title) + '</h4>' +
+              '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded ' + catColor + '">' + cat + '</span>' +
+            '</div>' +
+            (q.desc ? '<p class="text-xs text-slate-400 mt-0.5 truncate">' + esc(q.desc) + '</p>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="flex-shrink-0 ml-2">' +
+          '<span class="text-xs font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">+' + num(q.points || 0) + ' P</span>' +
+        '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  // ─── Shop ────────────────────────────────────────────────────────
+  function renderShop() {
+    var container = document.getElementById("shop-list");
+    var items = (appData && appData.shopItems) ? appData.shopItems : [];
+    var balance = (appData && appData.child) ? (appData.child.currentBalance || 0) : 0;
+
+    if (items.length === 0) {
+      container.innerHTML = '<div class="card p-8 text-center text-slate-400"><p class="text-sm font-semibold">등록된 상점 보상이 없습니다.</p></div>';
+      return;
+    }
+
+    container.innerHTML = items.map(function(item) {
+      var canBuy = balance >= item.cost;
+      return '<div class="card p-4 flex items-center gap-3">' +
+        '<span class="text-3xl flex-shrink-0">' + (item.icon || "🎁") + '</span>' +
+        '<div class="flex-1 min-w-0">' +
+          '<h4 class="font-extrabold text-sm text-slate-900">' + esc(item.title) + '</h4>' +
+          (item.desc ? '<p class="text-xs text-slate-400 mt-0.5">' + esc(item.desc) + '</p>' : '') +
+        '</div>' +
+        '<button type="button" onclick="redeemAction(\'' + esc(item.id) + '\',\'' + esc(item.title) + '\',' + item.cost + ',\'' + esc(item.icon||'🎁') + '\')" ' +
+          'class="tap flex-shrink-0 px-3 py-2 rounded-xl text-xs font-extrabold shadow-sm ' +
+          (canBuy ? 'bg-amber-500 text-white shadow-amber-500/30' : 'bg-slate-100 text-slate-400') + '">' +
+          num(item.cost) + ' P 교환' +
+        '</button>' +
+      '</div>';
+    }).join("");
+  }
+
+  // ─── Inventory ───────────────────────────────────────────────────
+  function renderInventory() {
+    var container = document.getElementById("inv-list");
+    var inv = (appData && appData.inventory) ? appData.inventory : [];
+    var badge = document.getElementById("inv-badge");
+    var activeItems = inv.filter(function(i) { return i.status === "ACTIVE"; });
+    badge.textContent = activeItems.length + "개";
+
+    if (inv.length === 0) {
+      container.innerHTML = '<div class="card p-8 text-center text-slate-400"><div class="text-3xl mb-2">🎒</div><p class="text-sm font-semibold">인벤토리가 비어있어요.</p><p class="text-xs mt-1">상점에서 보상을 교환해 보세요!</p></div>';
+      return;
+    }
+
+    container.innerHTML = inv.map(function(item) {
+      var used = item.status === "USED";
+      var badgeCls = used ? "badge-used" : "badge-active";
+      var badgeTxt = used ? "사용됨" : "사용 가능";
+      return '<div class="card p-4 flex items-center gap-3 ' + (used ? "opacity-60" : "") + '">' +
+        '<span class="text-3xl flex-shrink-0">' + (item.icon || "🎁") + '</span>' +
+        '<div class="flex-1 min-w-0">' +
+          '<h4 class="font-extrabold text-sm text-slate-900">' + esc(item.rewardTitle) + '</h4>' +
+          '<p class="text-xs text-slate-400 mt-0.5">획득: ' + (item.acquiredAt || "") + '</p>' +
+        '</div>' +
+        '<div class="flex flex-col items-end gap-1.5">' +
+          '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + badgeCls + '">' + badgeTxt + '</span>' +
+          (!used ? '<button type="button" onclick="useItemAction(\'' + item.id + '\',\'' + esc(item.rewardTitle) + '\')" class="tap text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg">사용하기</button>' : '') +
+        '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  // ─── History ─────────────────────────────────────────────────────
+  function renderHistory() {
+    var container = document.getElementById("history-list");
+    var logs = (appData && appData.recentLogs) ? appData.recentLogs : [];
+    var badge = document.getElementById("history-badge");
+    badge.textContent = logs.length + "건";
+
+    if (logs.length === 0) {
+      container.innerHTML = '<div class="card p-8 text-center text-slate-400"><div class="text-3xl mb-2">📜</div><p class="text-sm font-semibold">아직 활동 기록이 없습니다.</p></div>';
+      document.getElementById("history-pagination").classList.add("hidden");
+      return;
+    }
+
+    var totalPages = Math.max(1, Math.ceil(logs.length / HIST_PAGE));
+    if (histPage > totalPages) histPage = totalPages;
+    if (histPage < 1) histPage = 1;
+
+    var start = (histPage - 1) * HIST_PAGE;
+    var page  = logs.slice(start, start + HIST_PAGE);
+
+    container.innerHTML = page.map(function(log) {
+      var isApproved = log.status === "APPROVED";
+      var isRejected = log.status === "REJECTED";
+      var badgeCls   = isApproved ? "badge-approved" : (isRejected ? "badge-rejected" : "badge-pending");
+      var badgeTxt   = isApproved ? "✅ 승인" : (isRejected ? "❌ 반려" : "⏳ 대기");
+
+      var qObj = (appData && appData.quests) ? appData.quests.find(function(q) { return q.id === log.questId; }) : null;
+      var title = (log.title && log.title !== "퀘스트 완료") ? log.title : (qObj ? qObj.title : (log.title || "퀘스트 완료"));
+      var points = log.points || (qObj ? qObj.points : 0);
+
+      var photos = parsePhotos(log.photoUrl);
+      var photosHtml = "";
+      if (photos.length > 0) {
+        var cols = photos.length === 1 ? "grid-cols-1" : (photos.length === 2 ? "grid-cols-2" : "grid-cols-3");
+        photosHtml = '<div class="grid ' + cols + ' gap-1.5 mt-2">' +
+          photos.map(function(p) {
+            var fid = extractId(p);
+            var src = fid ? "https://lh3.googleusercontent.com/d/" + fid : p;
+            return '<div class="photo-slot">' +
+              '<img src="' + src + '" referrerpolicy="no-referrer" loading="lazy" ' +
+              'onclick="openPhotoViewer(\'' + src + '\')" ' +
+              'onerror="if(!this.dataset.retried && \'' + fid + '\'){this.dataset.retried=\'1\';this.src=\'https://drive.google.com/thumbnail?id=' + fid + '&sz=w800\';}else{this.parentElement.style.display=\'none\';}" class="cursor-pointer">' +
+            '</div>';
+          }).join("") +
+        '</div>';
+      }
+
+      return '<div class="card p-4 space-y-2.5">' +
+        '<div class="flex items-center justify-between">' +
+          '<h4 class="font-extrabold text-sm text-slate-900 flex-1 pr-2">' + esc(title) + '</h4>' +
+          '<div class="flex items-center gap-2 flex-shrink-0">' +
+            '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + badgeCls + '">' + badgeTxt + '</span>' +
+            '<span class="text-xs font-black text-emerald-600">+' + num(points) + ' P</span>' +
+          '</div>' +
+        '</div>' +
+        (log.date ? '<p class="text-[11px] text-slate-400 font-medium">📅 ' + log.date + '</p>' : '') +
+        (log.memo ? '<div class="bg-indigo-50 rounded-xl p-2.5 text-xs text-indigo-900"><strong>💬 소감:</strong> ' + esc(log.memo) + '</div>' : '') +
+        photosHtml +
+        (log.parentComment ? (isRejected ? '<div class="bg-rose-50 rounded-xl p-2.5 text-xs text-rose-900 border border-rose-200/60"><strong>❌ ' + esc(log.approvedBy || "부모님") + '의 반려 사유:</strong> ' + esc(log.parentComment) + '</div>' : '<div class="bg-amber-50 rounded-xl p-2.5 text-xs text-amber-900 border border-amber-200/60"><strong>👑 ' + esc(log.approvedBy || "부모님") + '의 칭찬:</strong> ' + esc(log.parentComment) + '</div>') : '') +
+      '</div>';
+    }).join("");
+
+    // Pagination
+    var pag = document.getElementById("history-pagination");
+    if (totalPages > 1) {
+      pag.classList.remove("hidden");
+      document.getElementById("hist-page-info").textContent = histPage + " / " + totalPages;
+      document.getElementById("hist-prev").disabled = (histPage === 1);
+      document.getElementById("hist-next").disabled = (histPage === totalPages);
+      document.getElementById("hist-prev").className = "tap px-3.5 py-2 rounded-xl text-xs font-bold " + (histPage === 1 ? "bg-slate-100 text-slate-400 opacity-50" : "bg-white border border-slate-200 text-slate-700 shadow-sm");
+      document.getElementById("hist-next").className = "tap px-3.5 py-2 rounded-xl text-xs font-bold " + (histPage >= totalPages ? "bg-slate-100 text-slate-400 opacity-50" : "bg-white border border-slate-200 text-slate-700 shadow-sm");
+    } else {
+      pag.classList.add("hidden");
+    }
+  }
+
+  function changeHistPage(d) {
+    var logs = (appData && appData.recentLogs) ? appData.recentLogs : [];
+    var total = Math.max(1, Math.ceil(logs.length / HIST_PAGE));
+    var next = histPage + d;
+    if (next >= 1 && next <= total) {
+      histPage = next;
+      renderHistory();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
+  // ─── Approve ─────────────────────────────────────────────────────
+  function renderApprove() {
+    var container = document.getElementById("approve-list");
+    var pending = (appData && appData.pendingReviews) ? appData.pendingReviews : [];
+
+    if (pending.length === 0) {
+      container.innerHTML = '<div class="card p-8 text-center"><div class="text-3xl mb-2">🎉</div><p class="text-sm font-bold text-slate-700">심의 대기 퀘스트가 없습니다!</p><p class="text-xs text-slate-400 mt-1">모든 인증이 신속하게 승인되었습니다.</p></div>';
+      return;
+    }
+
+    container.innerHTML = pending.map(function(log) {
+      var qObj = (appData && appData.quests) ? appData.quests.find(function(q) { return q.id === log.questId; }) : null;
+      var title = (log.title && log.title !== "퀘스트 완료") ? log.title : (qObj ? qObj.title : (log.title || "퀘스트 완료"));
+      var points = log.points || (qObj ? qObj.points : 0);
+
+      var photos = parsePhotos(log.photoUrl);
+      var photosHtml = "";
+      if (photos.length > 0) {
+        var cols = photos.length === 1 ? "grid-cols-1" : (photos.length === 2 ? "grid-cols-2" : "grid-cols-3");
+        photosHtml = '<div class="grid ' + cols + ' gap-1.5">' +
+          photos.map(function(p) {
+            var fid = extractId(p);
+            var src = fid ? "https://lh3.googleusercontent.com/d/" + fid : p;
+            return '<div class="photo-slot">' +
+              '<img src="' + src + '" referrerpolicy="no-referrer" loading="lazy" ' +
+              'onclick="openPhotoViewer(\'' + src + '\')" ' +
+              'onerror="if(!this.dataset.retried && \'' + fid + '\'){this.dataset.retried=\'1\';this.src=\'https://drive.google.com/thumbnail?id=' + fid + '&sz=w800\';}else{this.parentElement.style.display=\'none\';}" class="cursor-pointer">' +
+            '</div>';
+          }).join("") +
+        '</div>';
+      }
+
+      return '<div class="card p-4 space-y-3">' +
+        '<div class="flex items-center justify-between">' +
+          '<span class="text-[10px] font-bold badge-pending px-2 py-0.5 rounded-full">⏳ 심의 대기</span>' +
+          '<span class="text-xs font-black text-indigo-600">+' + num(points) + ' P</span>' +
+        '</div>' +
+        '<div>' +
+          '<h4 class="text-sm font-extrabold text-slate-900">' + esc(title) + '</h4>' +
+          (log.date ? '<p class="text-[11px] text-slate-400 mt-0.5">📅 ' + log.date + '</p>' : '') +
+        '</div>' +
+        (log.memo ? '<div class="bg-slate-50 rounded-xl p-2.5 text-xs text-slate-700 border border-slate-100"><strong>💬 아이 소감:</strong> ' + esc(log.memo) + '</div>' : '') +
+        (photosHtml ? '<div>' + photosHtml + '</div>' : '') +
+        '<div class="space-y-2">' +
+          '<input type="text" id="comment-' + log.id + '" placeholder="칭찬 한마디를 입력해주세요! (예: 정말 잘했어! 👏)" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50">' +
+          '<div class="flex gap-2">' +
+            '<button type="button" onclick="rejectAction(\'' + log.id + '\',\'' + esc(title) + '\',' + points + ',\'' + (log.userId || "child_1") + '\')" class="tap flex-1 py-2.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold">❌ 반려</button>' +
+            '<button type="button" onclick="approveAction(\'' + log.id + '\',\'' + esc(title) + '\',' + points + ',\'' + (log.userId || "child_1") + '\')" class="tap flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-extrabold shadow-sm shadow-emerald-600/20">✅ 승인 (+' + num(points) + ' P)</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join("");
+  }
+
+  // ─── Quest Modal ─────────────────────────────────────────────────
+  function openQuestModal(qid) {
+    var quests = (appData && appData.quests) ? appData.quests : [];
+    selectedQuest  = quests.find(function(q) { return q.id === qid; });
+    if (!selectedQuest) return;
+    selectedPhotos = [];
+
+    document.getElementById("qm-cat").textContent   = selectedQuest.category || "일일";
+    document.getElementById("qm-title").textContent  = selectedQuest.title    || "";
+    document.getElementById("qm-desc").textContent   = selectedQuest.desc     || "";
+    document.getElementById("qm-pts").textContent    = "+" + num(selectedQuest.points || 0) + " P";
+    document.getElementById("qm-memo").value         = "";
+    document.getElementById("photo-count").textContent = "0 / 3장";
+    document.getElementById("photo-hint").classList.add("hidden");
+
+    renderPhotoGrid();
+    var modal = document.getElementById("quest-modal");
+    var sheet = document.getElementById("quest-sheet");
+    modal.classList.remove("hidden");
+    modal.style.display = "flex";
+    requestAnimationFrame(function() { sheet.classList.add("open"); });
+  }
+
+  function closeQuestModal() {
+    var sheet = document.getElementById("quest-sheet");
+    sheet.classList.remove("open");
+    setTimeout(function() {
+      document.getElementById("quest-modal").classList.add("hidden");
+      document.getElementById("quest-modal").style.display = "";
+    }, 350);
+  }
+
+  // ─── Photo Grid ─────────────────────────────────────────────────
+  function renderPhotoGrid() {
+    var grid = document.getElementById("photo-grid");
+    if (!grid) return;
+    var slots = "";
+
+    // Existing photo slots
+    for (var i = 0; i < selectedPhotos.length; i++) {
+      var idx = i;
+      slots += '<div class="photo-slot">' +
+        '<img src="' + selectedPhotos[idx] + '" class="w-full h-full object-cover">' +
+        '<button type="button" onclick="removePhoto(' + idx + ')" class="absolute top-1 right-1 w-6 h-6 bg-black/60 text-white rounded-full text-xs font-black flex items-center justify-center leading-none">✕</button>' +
+      '</div>';
+    }
+
+    // Add button (max 3)
+    if (selectedPhotos.length < 3) {
+      slots += '<label class="tap photo-slot border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center cursor-pointer hover:bg-slate-100">' +
+        '<span class="text-2xl text-slate-400">＋</span>' +
+        '<span class="text-[10px] font-bold text-slate-400 mt-0.5">사진 추가</span>' +
+        '<input type="file" id="photo-file-input" accept="image/*" multiple onchange="handlePhotoUpload(this)" class="hidden">' +
+      '</label>';
+    }
+
+    grid.innerHTML = slots;
+    document.getElementById("photo-count").textContent = selectedPhotos.length + " / 3장";
+  }
+
+  function handlePhotoUpload(input) {
+    var files = Array.from(input.files || []);
+    if (!files.length) return;
+    var canAdd = 3 - selectedPhotos.length;
+    var toAdd  = files.slice(0, canAdd);
+
+    var loaded = 0;
+    toAdd.forEach(function(file) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        selectedPhotos.push(e.target.result);
+        loaded++;
+        if (loaded === toAdd.length) {
+          document.getElementById("photo-hint").classList.add("hidden");
+          renderPhotoGrid();
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    input.value = "";
+  }
+
+  function removePhoto(idx) {
+    selectedPhotos.splice(idx, 1);
+    renderPhotoGrid();
+  }
+
+  // ─── Submit Quest ────────────────────────────────────────────────
+  function submitQuestAction() {
+    if (!selectedQuest) return;
+
+    if (selectedPhotos.length < 2) {
+      document.getElementById("photo-hint").classList.remove("hidden");
+      return;
+    }
+
+    var btn = document.getElementById("qm-submit-btn");
+    btn.innerHTML = '<span class="spinner"></span><span>제출 중...</span>';
+    btn.disabled  = true;
+
+    var payload = {
+      questId:      selectedQuest.id,
+      title:        selectedQuest.title,
+      points:       selectedQuest.points,
+      userId:       currentUser.id,
+      isParent:     currentUser.role === "PARENT",
+      memo:         document.getElementById("qm-memo").value.trim(),
+      photosBase64: selectedPhotos
+    };
+
+    callApi("completeQuest", payload, function(res) {
+      btn.innerHTML = "완료 제출하기 🚀";
+      btn.disabled  = false;
+      closeQuestModal();
+      if (res && res.success) {
+        confetti({ particleCount: 90, spread: 65, origin: { y: 0.7 } });
+        showToast(res.message || "제출 완료!", 3500);
+        if (res.appData) { appData = res.appData; renderAll(); }
+      } else {
+        showToast("⚠️ " + (res && res.error ? res.error : "오류 발생"), 3500);
+      }
+    }, function(err) {
+      btn.innerHTML = "완료 제출하기 🚀";
+      btn.disabled  = false;
+      showToast("⚠️ 통신 오류: " + err, 3500);
+    });
+  }
+
+  // ─── Approve / Reject ────────────────────────────────────────────
+  function approveAction(logId, title, points, userId) {
+    var comment = (document.getElementById("comment-" + logId) || {}).value || "";
+    callApi("approveQuest", {
+      logId: logId, title: title, points: points, userId: userId,
+      comment: comment, approvedBy: currentUser.name
+    }, function(res) {
+      if (res && res.success) {
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        showToast(res.message || "✅ 승인 완료!", 3000);
+        if (res.appData) { appData = res.appData; renderAll(); }
+      } else {
+        showToast("⚠️ " + (res && res.error ? res.error : "오류"), 3000);
+      }
+    });
+  }
+
+  function rejectAction(logId, title, points, userId) {
+    if (!confirm("[" + title + "] 퀘스트를 반려하시겠습니까?")) return;
+    var comment = (document.getElementById("comment-" + logId) || {}).value || "";
+    callApi("rejectQuest", {
+      logId: logId, title: title, comment: comment, approvedBy: currentUser.name
+    }, function(res) {
+      showToast(res.message || "❌ 반려 처리됨", 3000);
+      if (res && res.appData) { appData = res.appData; renderAll(); }
+    });
+  }
+
+  // ─── Shop Redeem ─────────────────────────────────────────────────
+  function redeemAction(id, title, cost, icon) {
+    var bal = (appData && appData.child) ? (appData.child.currentBalance || 0) : 0;
+    if (bal < cost) { showToast("💸 포인트가 부족합니다! (잔액: " + num(bal) + " P)", 3000); return; }
+    if (!confirm("[" + title + "]을(를) " + num(cost) + " P에 교환하시겠습니까?")) return;
+
+    callApi("redeemReward", {
+      rewardId: id, title: title, cost: cost, icon: icon, userId: currentUser.id
+    }, function(res) {
+      if (res && res.success) {
+        confetti({ particleCount: 80, spread: 55, origin: { y: 0.7 } });
+        showToast(res.message || "🎁 교환 완료!", 3000);
+        if (res.appData) { appData = res.appData; renderAll(); }
+      } else {
+        showToast("⚠️ " + (res && res.error ? res.error : "오류"), 3000);
+      }
+    });
+  }
+
+  // ─── Use Inventory Item ──────────────────────────────────────────
+  function useItemAction(invId, title) {
+    if (!confirm("[" + title + "] 아이템을 사용하시겠습니까?")) return;
+    callApi("useInventoryItem", { invId: invId }, function(res) {
+      showToast(res.message || "✅ 사용 완료!", 3000);
+      if (res && res.appData) { appData = res.appData; renderAll(); }
+    });
+  }
+
+  // ─── Tab Switching ───────────────────────────────────────────────
+  function switchTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll(".tab-view").forEach(function(v) { v.classList.add("hidden"); });
+    document.querySelectorAll(".tab-item").forEach(function(b) { b.classList.remove("active"); });
+    var view = document.getElementById("view-" + tab);
+    var btn  = document.getElementById("tab-" + tab);
+    if (view) view.classList.remove("hidden");
+    if (btn)  btn.classList.add("active");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function onApproveTabClick() {
+    if (currentUser.role === "PARENT") {
+      switchTab("approve");
+    } else {
+      // 자녀가 승인 탭 클릭 시 PIN 요청
+      pinAfterSuccess = function() { switchTab("approve"); };
+      openPinModal();
+    }
+  }
+
+  // ─── PIN Modal ────────────────────────────────────────────────────
+  function openPinModal() {
+    document.getElementById("pin-error").classList.add("hidden");
+    document.getElementById("pin-input").value = "";
+    setPinTarget("mom");
+    var modal = document.getElementById("pin-modal");
+    modal.classList.remove("hidden");
+    modal.style.display = "flex";
+    setTimeout(function() { document.getElementById("pin-input").focus({ preventScroll: true }); }, 100);
+  }
+
+  function closePinModal() {
+    document.getElementById("pin-modal").classList.add("hidden");
+    document.getElementById("pin-modal").style.display = "";
+    pinAfterSuccess = null;
+  }
+
+  function setPinTarget(who) {
+    pinTarget = who;
+    var momBtn = document.getElementById("pin-btn-mom");
+    var dadBtn = document.getElementById("pin-btn-dad");
+    momBtn.className = "tap flex-1 py-2 rounded-xl border-2 text-xs font-bold " +
+      (who === "mom" ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-500");
+    dadBtn.className = "tap flex-1 py-2 rounded-xl border-2 text-xs font-bold " +
+      (who === "dad" ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-slate-200 bg-white text-slate-500");
+  }
+
+  function verifyPin() {
+    var pin  = document.getElementById("pin-input").value.trim();
+    var pins = (appData && appData.parentPins) ? appData.parentPins : { mom: "1121", dad: "7590" };
+    var expected = pins[pinTarget] || (pinTarget === "mom" ? "1121" : "7590");
+
+    if (pin === expected) {
+      // Set current user as parent
+      var prof = (appData && appData.profiles) ? appData.profiles.find(function(p) {
+        return p.id === pinTarget || p.name.includes(pinTarget === "mom" ? "엄마" : "아빠");
+      }) : null;
+      currentUser = {
+        id:   pinTarget,
+        name: prof ? prof.name : (pinTarget === "mom" ? "엄마" : "아빠"),
+        role: "PARENT",
+        icon: pinTarget === "mom" ? "👩" : "👨"
+      };
+      renderHeader();
+      closePinModal();
+      if (pinAfterSuccess) { pinAfterSuccess(); pinAfterSuccess = null; }
+    } else {
+      document.getElementById("pin-error").classList.remove("hidden");
+      document.getElementById("pin-input").value = "";
+    }
+  }
+
+  // ─── Profile Modal ───────────────────────────────────────────────
+  function openProfileModal() {
+    var modal = document.getElementById("profile-modal");
+    var sheet = document.getElementById("profile-sheet");
+    modal.classList.remove("hidden");
+    modal.style.display = "flex";
+    requestAnimationFrame(function() { sheet.classList.add("open"); });
+  }
+
+  function closeProfileModal() {
+    var sheet = document.getElementById("profile-sheet");
+    sheet.classList.remove("open");
+    setTimeout(function() {
+      document.getElementById("profile-modal").classList.add("hidden");
+      document.getElementById("profile-modal").style.display = "";
+    }, 350);
+  }
+
+  function renderProfileList() {
+    var container = document.getElementById("profile-list");
+    var profiles = (appData && appData.profiles) ? appData.profiles : [
+      { id: "child_1", name: "우리 아이", role: "CHILD", icon: "🧒" },
+      { id: "mom",     name: "엄마",     role: "PARENT", icon: "👩" },
+      { id: "dad",     name: "아빠",     role: "PARENT", icon: "👨" }
+    ];
+
+    container.innerHTML = profiles.map(function(p) {
+      var isParent = p.role === "PARENT";
+      return '<button type="button" onclick="selectProfile(\'' + p.id + '\')" class="tap w-full p-3.5 rounded-2xl border border-slate-200 flex items-center justify-between hover:bg-slate-50">' +
+        '<div class="flex items-center gap-3">' +
+          '<span class="text-2xl">' + (p.icon || "🧒") + '</span>' +
+          '<div class="text-left">' +
+            '<p class="text-sm font-extrabold text-slate-900">' + esc(p.name) + '</p>' +
+            '<p class="text-[11px] text-slate-400">' + (isParent ? "부모 모드 (심의 & 승인)" : "아이 모드 (퀘스트 수행)") + '</p>' +
+          '</div>' +
+        '</div>' +
+        '<span class="text-xs font-bold text-indigo-600">' + (isParent ? "선택 (PIN)" : "선택") + '</span>' +
+      '</button>';
+    }).join("");
+  }
+
+  function selectProfile(pid) {
+    var profiles = (appData && appData.profiles) ? appData.profiles : [];
+    var prof = profiles.find(function(p) { return p.id === pid; });
+    if (!prof) return;
+
+    closeProfileModal();
+
+    if (prof.role === "PARENT") {
+      pinTarget = (prof.name.includes("엄마") || pid === "mom") ? "mom" : "dad";
+      pinAfterSuccess = function() {
+        currentUser = { id: prof.id, name: prof.name, role: "PARENT", icon: prof.icon || (pinTarget === "mom" ? "👩" : "👨") };
+        renderHeader();
+        switchTab("approve");
+      };
+      openPinModal();
+    } else {
+      currentUser = { id: prof.id, name: prof.name, role: "CHILD", icon: prof.icon || "🧒" };
+      renderHeader();
+      switchTab("quests");
+    }
+  }
+
+  // ─── Photo Viewer ─────────────────────────────────────────────────
+  function openPhotoViewer(src) {
+    var v = document.getElementById("photo-viewer");
+    document.getElementById("photo-viewer-img").src = src;
+    v.style.display = "flex";
+  }
+
+  function closePhotoViewer() {
+    document.getElementById("photo-viewer").style.display = "none";
+  }
+
+  // ─── Toast ───────────────────────────────────────────────────────
+  var toastTimer = null;
+  function showToast(msg, ms) {
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.style.opacity = "1";
+    clearTimeout(toastTimer);
+    if (ms && ms < 99999) {
+      toastTimer = setTimeout(function() { t.style.opacity = "0"; }, ms);
+    }
+  }
+  function hideToast() {
+    clearTimeout(toastTimer);
+    document.getElementById("toast").style.opacity = "0";
+  }
+
+  // ─── Helpers ─────────────────────────────────────────────────────
+  function num(n) { return Number(n || 0).toLocaleString("ko-KR"); }
+
+  function esc(s) {
+    return String(s || "")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function extractId(str) {
+    if (!str) return "";
+    var s = String(str).trim();
+    var m1 = s.match(/\/d\/([a-zA-Z0-9_-]{25,})/);
+    if (m1) return m1[1];
+    var m2 = s.match(/[?&]id=([a-zA-Z0-9_-]{25,})/i) || s.match(/id=([a-zA-Z0-9_-]{25,})/i);
+    if (m2) return m2[1];
+    var m3 = s.match(/([a-zA-Z0-9_-]{25,})/);
+    if (m3) return m3[1];
+    return "";
+  }
+
+  function parsePhotos(raw) {
+    if (!raw) return [];
+    var s = String(raw).trim();
+    if (!s) return [];
+    if (s.startsWith("[")) { try { var p = JSON.parse(s); if (Array.isArray(p)) return p.filter(Boolean); } catch(e) {} }
+    return s.split(/[,|\n\r]+/).map(function(x) { return x.trim(); }).filter(Boolean);
+  }
+
+  // ─── Dev Fallback ────────────────────────────────────────────────
+  function getDevFallback() {
+    return {
+      profiles: [
+        { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  icon: "🧒", points: 7400, totalExp: 7400 },
+        { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", icon: "👩", pin: "1121" },
+        { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", icon: "👨", pin: "7590" }
+      ],
+      parentPins: { mom: "1121", dad: "7590" },
+      child: {
+        id: "child_1", name: "상급종합빡빡이(용사)", icon: "🧒",
+        level: 3, title: "⭐ 든든한 퀘스트 챔피언",
+        totalExp: 7400, currentBalance: 7400,
+        targetItem: "🎮 플레이스테이션", targetPoints: 100000,
+        progressPct: 8, lvProgress: 2400, nextLvXp: 2500
+      },
+      quests: [
+        { id: "Q1", title: "책상 정리",           category: "일일", period: "일일", points: 300, xp: 300, icon: "🧹", desc: "책상 위를 깔끔하게 정리하기" },
+        { id: "Q2", title: "설거지 & 싱크대 정리", category: "일일", period: "일일", points: 200, xp: 200, icon: "🍽️", desc: "그릇 씻고 싱크대 닦기" },
+        { id: "Q3", title: "오늘의 숙제 완료",     category: "일일", period: "일일", points: 500, xp: 500, icon: "✏️", desc: "학교 숙제 완료하기" },
+        { id: "Q4", title: "분리수거 돕기",        category: "주간", period: "주간", points: 500, xp: 500, icon: "♻️", desc: "분리수거 버리기" },
+        { id: "Q5", title: "빨래 개기",            category: "주간", period: "주간", points: 500, xp: 500, icon: "⭐", desc: "빨래 개기 돕기" }
+      ],
+      shopItems: [
+        { id: "R1", title: "🎮 주말 게임 30분",     cost: 1500, icon: "🎮", category: "자유시간", desc: "게임 30분 추가 이용권" },
+        { id: "R2", title: "🍦 아이스크림",          cost: 3000, icon: "🍦", category: "간식",     desc: "싱글팅 아이스크림 1개" },
+        { id: "R3", title: "💰 용돈 3,000원",        cost: 3000, icon: "💵", category: "용돈",     desc: "현금 3천원 지급" },
+        { id: "R4", title: "🛋️ 주말 늦잠 자유",     cost: 1000, icon: "🛋️", category: "자유시간", desc: "주말 아침 늦잠 허용" }
+      ],
+      recentLogs: [
+        { id: "L1", title: "책상 정리", status: "APPROVED", points: 300, xp: 300, date: "2026-08-31 10:30", memo: "깔끔하게 정리했어요!", parentComment: "정말 잘했어! 멋져!", approvedBy: "엄마", photoUrl: "", userId: "child_1" },
+        { id: "L2", title: "분리수거 돕기", status: "PENDING",  points: 500, xp: 500, date: "2026-09-01 09:15", memo: "분리수거 다 했어요!", parentComment: "", approvedBy: "", photoUrl: "", userId: "child_1" }
+      ],
+      pendingReviews: [
+        { id: "L2", title: "분리수거 돕기", status: "PENDING", points: 500, xp: 500, date: "2026-09-01 09:15", memo: "분리수거 다 했어요!", photoUrl: "", userId: "child_1" }
+      ],
+      inventory: [
+        { id: "INV1", rewardTitle: "🎮 주말 게임 30분", status: "ACTIVE", icon: "🎮", acquiredAt: "2026-08-28", userId: "child_1" },
+        { id: "INV2", rewardTitle: "🍦 아이스크림",      status: "USED",   icon: "🍦", acquiredAt: "2026-08-20", userId: "child_1" }
+      ]
+    };
+  }
+
+  // ─── API Config Modal Helpers ─────────────────────────────────────
+  function openApiConfigModal() {
+    closeProfileModal();
+    var modal = document.getElementById("api-modal");
+    document.getElementById("api-url-input").value = localStorage.getItem("FAMILY_QUEST_API_URL") || GAS_API_URL || "";
+    modal.classList.remove("hidden");
+    modal.style.display = "flex";
+  }
+
+  function closeApiConfigModal() {
+    var modal = document.getElementById("api-modal");
+    modal.classList.add("hidden");
+    modal.style.display = "";
+  }
+
+  function saveApiConfig() {
+    var url = document.getElementById("api-url-input").value.trim();
+    if (url) {
+      localStorage.setItem("FAMILY_QUEST_API_URL", url);
+      GAS_API_URL = url;
+      showToast("💾 API 주소가 저장되었습니다!", 2500);
+    } else {
+      localStorage.removeItem("FAMILY_QUEST_API_URL");
+      GAS_API_URL = "";
+      showToast("🗑️ 기본값으로 초기화되었습니다.", 2500);
+    }
+    closeApiConfigModal();
+    setTimeout(function() { loadData(); }, 300);
+  }
+  </script>
+</body>
+</html>
