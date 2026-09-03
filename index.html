@@ -1040,6 +1040,153 @@
       font-weight: 800 !important;
     }
 
+  
+    /* ================================================================= */
+    /* 🌟 HIGH-CONTRAST RIGHT-SIDE BADGES & BUTTONS (우측 시인성 극대화) */
+    /* ================================================================= */
+
+    /* 1. Quest Right Side Point Badge */
+    .quest-point-badge {
+      background: rgba(245, 158, 11, 0.15) !important;
+      border: 1.5px solid #F59E0B !important;
+      color: #FBBF24 !important;
+      font-size: 13px !important;
+      font-weight: 900 !important;
+      padding: 5px 12px !important;
+      border-radius: 12px !important;
+      display: inline-block !important;
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.25) !important;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+      white-space: nowrap !important;
+    }
+
+    /* 2. Shop Right Side Buy Button */
+    .shop-btn-can-buy {
+      background: linear-gradient(135deg, #F59E0B, #D97706) !important;
+      border: 1.5px solid #FCD34D !important;
+      color: #FFFFFF !important;
+      font-size: 12px !important;
+      font-weight: 900 !important;
+      padding: 7px 13px !important;
+      border-radius: 12px !important;
+      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4) !important;
+      cursor: pointer !important;
+      white-space: nowrap !important;
+    }
+    .shop-btn-disabled {
+      background: #1E293B !important;
+      border: 1.5px solid #475569 !important;
+      color: #CBD5E1 !important;
+      font-size: 12px !important;
+      font-weight: 800 !important;
+      padding: 7px 13px !important;
+      border-radius: 12px !important;
+      cursor: not-allowed !important;
+      white-space: nowrap !important;
+    }
+
+    /* 3. Header Counter Badges (내 인벤토리 '2개', 활동기록 '8건') */
+    .cyber-header-badge {
+      background: #1E293B !important;
+      border: 1.5px solid #8B5CF6 !important;
+      color: #C084FC !important;
+      font-size: 11.5px !important;
+      font-weight: 900 !important;
+      padding: 3px 10px !important;
+      border-radius: 9999px !important;
+      box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3) !important;
+    }
+
+    /* 4. Inventory Right Side Badges & Buttons */
+    .badge-active {
+      background: rgba(16, 185, 129, 0.2) !important;
+      border: 1.5px solid #10B981 !important;
+      color: #34D399 !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      padding: 3px 9px !important;
+      border-radius: 9999px !important;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.25) !important;
+    }
+    .badge-used {
+      background: #1E293B !important;
+      border: 1.5px solid #334155 !important;
+      color: #64748B !important;
+      font-size: 11px !important;
+      font-weight: 800 !important;
+      padding: 3px 9px !important;
+      border-radius: 9999px !important;
+    }
+    .inv-use-btn {
+      background: linear-gradient(135deg, #E11D48, #BE123C) !important;
+      border: 1.5px solid #FB7185 !important;
+      color: #FFFFFF !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      padding: 4px 10px !important;
+      border-radius: 8px !important;
+      cursor: pointer !important;
+      box-shadow: 0 2px 8px rgba(225, 29, 72, 0.4) !important;
+    }
+
+    /* 5. Status Badges in History & Approval */
+    .badge-approved {
+      background: rgba(16, 185, 129, 0.2) !important;
+      border: 1.5px solid #10B981 !important;
+      color: #34D399 !important;
+      font-weight: 900 !important;
+    }
+    .badge-pending {
+      background: rgba(245, 158, 11, 0.2) !important;
+      border: 1.5px solid #F59E0B !important;
+      color: #FBBF24 !important;
+      font-weight: 900 !important;
+    }
+    .badge-rejected {
+      background: rgba(239, 68, 68, 0.2) !important;
+      border: 1.5px solid #EF4444 !important;
+      color: #F87171 !important;
+      font-weight: 900 !important;
+    }
+
+    /* 6. Comment & Praise Boxes in History */
+    .cyber-memo-box {
+      background: #131E32 !important;
+      border: 1px solid rgba(99, 102, 241, 0.4) !important;
+      color: #CBD5E1 !important;
+      border-radius: 12px !important;
+      padding: 10px 12px !important;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+    }
+    .cyber-praise-box {
+      background: rgba(245, 158, 11, 0.15) !important;
+      border: 1.5px solid rgba(245, 158, 11, 0.5) !important;
+      color: #FDE68A !important;
+      border-radius: 12px !important;
+      padding: 10px 12px !important;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+      box-shadow: 0 2px 10px rgba(245, 158, 11, 0.15) !important;
+    }
+    .cyber-reject-box {
+      background: rgba(244, 63, 94, 0.15) !important;
+      border: 1.5px solid rgba(244, 63, 94, 0.5) !important;
+      color: #FECDD3 !important;
+      border-radius: 12px !important;
+      padding: 10px 12px !important;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+    }
+
+    /* 7. Catch-all: Kill any leftover white backgrounds inside cards */
+    .card .bg-white, .card .bg-slate-50, .card .bg-slate-100,
+    .card .bg-indigo-50, .card .bg-amber-50, .card .bg-rose-50 {
+      background: #1A2234 !important;
+      color: #E2E8F0 !important;
+      border-color: rgba(255, 255, 255, 0.12) !important;
+    }
+
   </style>
 </head>
 <body class="min-h-screen antialiased">
@@ -1161,7 +1308,7 @@
           <h2 class="text-sm font-black text-white">🎒 내 인벤토리</h2>
           <p class="text-xs text-slate-500 mt-0.5">획득한 보상과 쿠폰을 관리해요</p>
         </div>
-        <span id="inv-badge" class="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full">0개</span>
+        <span id="inv-badge" class="cyber-header-badge">0개</span>
       </div>
       <div id="inv-list" class="space-y-2.5"></div>
     </div>
@@ -1173,7 +1320,7 @@
           <h2 class="text-sm font-black text-white">📜 퀘스트 수행 & 심의 기록</h2>
           <p class="text-xs text-slate-500 mt-0.5">인증 사진과 부모님 코멘트 기록</p>
         </div>
-        <span id="history-badge" class="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full">0건</span>
+        <span id="history-badge" class="cyber-header-badge">0건</span>
       </div>
       <div id="history-list" class="space-y-3"></div>
       <!-- Pagination -->
@@ -1519,9 +1666,9 @@
 
     container.innerHTML = filtered.map(function(q) {
       var cat = normCat(q.category || q.period || "일일");
-      var catColor = cat === "주간" ? "bg-violet-100 text-violet-700"
-                   : cat === "특별" ? "bg-rose-100 text-rose-700"
-                   : "bg-blue-100 text-blue-700";
+      var catColor = cat === "주간" ? "bg-violet-500/20 text-violet-300 border border-violet-500/50"
+                   : cat === "특별" ? "bg-rose-500/20 text-rose-300 border border-rose-500/50"
+                   : "bg-blue-500/20 text-blue-300 border border-blue-500/50";
       return '<div onclick="openQuestModal(\'' + esc(q.id) + '\')" class="tap card p-4 flex items-center justify-between hover:border-indigo-200 transition-colors">' +
         '<div class="flex items-center gap-3 min-w-0">' +
           '<span class="text-2xl flex-shrink-0">' + (q.icon || "⭐") + '</span>' +
@@ -1534,7 +1681,7 @@
           '</div>' +
         '</div>' +
         '<div class="flex-shrink-0 ml-2">' +
-          '<span class="text-xs font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">+' + num(q.points || 0) + ' P</span>' +
+          '<span class="quest-point-badge">+' + num(q.points || 0) + ' P</span>' +
         '</div>' +
       '</div>';
     }).join("");
@@ -1561,7 +1708,7 @@
         '</div>' +
         '<button type="button" onclick="redeemAction(\'' + esc(item.id) + '\',\'' + esc(item.title) + '\',' + item.cost + ',\'' + esc(item.icon||'🎁') + '\')" ' +
           'class="tap flex-shrink-0 px-3 py-2 rounded-xl text-xs font-extrabold shadow-sm ' +
-          (canBuy ? 'bg-amber-500 text-white shadow-amber-500/30' : 'bg-slate-100 text-slate-400') + '">' +
+          (canBuy ? 'shop-btn-can-buy' : 'shop-btn-disabled') + '">' +
           num(item.cost) + ' P 교환' +
         '</button>' +
       '</div>';
@@ -1593,7 +1740,7 @@
         '</div>' +
         '<div class="flex flex-col items-end gap-1.5">' +
           '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + badgeCls + '">' + badgeTxt + '</span>' +
-          (!used ? '<button type="button" onclick="useItemAction(\'' + item.id + '\',\'' + esc(item.rewardTitle) + '\')" class="tap text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg">사용하기</button>' : '') +
+          (!used ? '<button type="button" onclick="useItemAction(\'' + item.id + '\',\'' + esc(item.rewardTitle) + '\')" class="tap inv-use-btn">사용하기</button>' : '') +
         '</div>' +
       '</div>';
     }).join("");
@@ -1655,9 +1802,9 @@
           '</div>' +
         '</div>' +
         (log.date ? '<p class="text-[11px] text-slate-400 font-medium">📅 ' + log.date + '</p>' : '') +
-        (log.memo ? '<div class="bg-indigo-50 rounded-xl p-2.5 text-xs text-indigo-900"><strong>💬 소감:</strong> ' + esc(log.memo) + '</div>' : '') +
+        (log.memo ? '<div class="cyber-memo-box"><strong>💬 소감:</strong> ' + esc(log.memo) + '</div>' : '') +
         photosHtml +
-        (log.parentComment ? (isRejected ? '<div class="bg-rose-50 rounded-xl p-2.5 text-xs text-rose-900 border border-rose-200/60"><strong>❌ ' + esc(log.approvedBy || "부모님") + '의 반려 사유:</strong> ' + esc(log.parentComment) + '</div>' : '<div class="bg-amber-50 rounded-xl p-2.5 text-xs text-amber-900 border border-amber-200/60"><strong>👑 ' + esc(log.approvedBy || "부모님") + '의 칭찬:</strong> ' + esc(log.parentComment) + '</div>') : '') +
+        (log.parentComment ? (isRejected ? '<div class="cyber-reject-box"><strong>❌ ' + esc(log.approvedBy || "부모님") + '의 반려 사유:</strong> ' + esc(log.parentComment) + '</div>' : '<div class="cyber-praise-box"><strong>👑 ' + esc(log.approvedBy || "부모님") + '의 칭찬:</strong> ' + esc(log.parentComment) + '</div>') : '') +
       '</div>';
     }).join("");
 
