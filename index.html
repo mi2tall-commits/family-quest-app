@@ -107,6 +107,14 @@
     dinoGameRunning = false;
     document.getElementById('dino-game-modal').classList.add('hidden');
     updateDinoBanner();
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('play_dino') || urlParams.has('game')) {
+      if (getDinoTickets() <= 0) {
+        localStorage.setItem('dino_game_tickets', '1');
+        updateDinoBanner();
+      }
+      setTimeout(openDinoGameModal, 400);
+    }
   }
 
   // Dino Physics & Entities
