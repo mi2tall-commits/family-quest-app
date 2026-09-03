@@ -951,6 +951,95 @@
       outline: none !important;
     }
 
+  
+    /* ================================================================= */
+    /* 🌟 HIGH-CONTRAST VISIBILITY OVERRIDES (완전 시인성 확보)           */
+    /* ================================================================= */
+    
+    /* All Cards Headings & Titles: Pure Brilliant White */
+    .card h2, .card h3, .card h4, 
+    .sheet h2, .sheet h3, .sheet h4,
+    .modal-sheet h2, .modal-sheet h3, .modal-sheet h4,
+    .modal-center h2, .modal-center h3, .modal-center h4 {
+      color: #FFFFFF !important;
+      font-weight: 800 !important;
+    }
+
+    /* Force all dark text utility classes to bright high contrast in dark mode */
+    .text-slate-900, .text-slate-800, .text-gray-900, .text-gray-800 {
+      color: #FFFFFF !important;
+    }
+    .text-slate-700, .text-gray-700 {
+      color: #E2E8F0 !important;
+    }
+    .text-slate-500, .text-gray-500 {
+      color: #94A3B8 !important;
+    }
+    .text-slate-600, .text-gray-600 {
+      color: #CBD5E1 !important;
+    }
+
+    /* Card Item Titles */
+    .card .font-extrabold, .card .font-black, .card .font-bold {
+      color: #FFFFFF;
+    }
+    .card p.text-slate-400, .card p.text-xs {
+      color: #94A3B8 !important;
+    }
+
+    /* Bottom Navigation Bar Glass Bot - Dark Cyber Aesthetic */
+    .glass-bot {
+      background: rgba(15, 23, 42, 0.96) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5) !important;
+    }
+    .glass-bot .tab-item {
+      color: #8C9BB0 !important;
+    }
+    .glass-bot .tab-item.active {
+      color: #FBBF24 !important;
+    }
+    .glass-bot .tab-item.active .tab-label {
+      color: #FBBF24 !important;
+      font-weight: 900 !important;
+    }
+
+    /* Modal Sheets (.sheet, .sheet-center) Dark Background */
+    .sheet, .sheet-center {
+      background: #13192B !important;
+      color: #FFFFFF !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8) !important;
+    }
+    .grabber {
+      background: #475569 !important;
+    }
+
+    /* Input Fields & Textareas */
+    input, textarea, select {
+      background-color: #0B0F19 !important;
+      border: 1px solid rgba(255, 255, 255, 0.15) !important;
+      color: #FFFFFF !important;
+    }
+    input::placeholder, textarea::placeholder {
+      color: #64748B !important;
+    }
+
+    /* Quest Filter Buttons */
+    .filter-btn {
+      background: #182238 !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      color: #94A3B8 !important;
+    }
+    .filter-btn.active {
+      background: #8B5CF6 !important;
+      color: #FFFFFF !important;
+      border-color: #A78BFA !important;
+      font-weight: 800 !important;
+    }
+
   </style>
 </head>
 <body class="min-h-screen antialiased">
@@ -1069,7 +1158,7 @@
     <div id="view-inv" class="tab-view hidden space-y-4 py-4">
       <div class="card p-4 flex items-center justify-between">
         <div>
-          <h2 class="text-sm font-black text-slate-900">🎒 내 인벤토리</h2>
+          <h2 class="text-sm font-black text-white">🎒 내 인벤토리</h2>
           <p class="text-xs text-slate-500 mt-0.5">획득한 보상과 쿠폰을 관리해요</p>
         </div>
         <span id="inv-badge" class="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full">0개</span>
@@ -1081,7 +1170,7 @@
     <div id="view-history" class="tab-view hidden space-y-4 py-4">
       <div class="card p-4 flex items-center justify-between">
         <div>
-          <h2 class="text-sm font-black text-slate-900">📜 퀘스트 수행 & 심의 기록</h2>
+          <h2 class="text-sm font-black text-white">📜 퀘스트 수행 & 심의 기록</h2>
           <p class="text-xs text-slate-500 mt-0.5">인증 사진과 부모님 코멘트 기록</p>
         </div>
         <span id="history-badge" class="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full">0건</span>
@@ -1089,16 +1178,16 @@
       <div id="history-list" class="space-y-3"></div>
       <!-- Pagination -->
       <div id="history-pagination" class="flex items-center justify-between pb-4 px-1 hidden">
-        <button type="button" id="hist-prev" onclick="changeHistPage(-1)" class="tap px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold shadow-sm">◀ 이전</button>
+        <button type="button" id="hist-prev" onclick="changeHistPage(-1)" class="tap px-3.5 py-2 bg-slate-800 border border-slate-700 text-slate-200 rounded-xl text-xs font-bold shadow-sm">◀ 이전</button>
         <span id="hist-page-info" class="text-xs font-bold text-slate-600">1 / 1</span>
-        <button type="button" id="hist-next" onclick="changeHistPage(1)" class="tap px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold shadow-sm">다음 ▶</button>
+        <button type="button" id="hist-next" onclick="changeHistPage(1)" class="tap px-3.5 py-2 bg-slate-800 border border-slate-700 text-slate-200 rounded-xl text-xs font-bold shadow-sm">다음 ▶</button>
       </div>
     </div>
 
     <!-- ── TAB: 승인 (부모) ───────────── -->
     <div id="view-approve" class="tab-view hidden space-y-4 py-4">
       <div class="card p-5 border-l-4 border-amber-500">
-        <h2 class="text-sm font-black text-slate-900 flex items-center gap-2"><span class="text-xl">⚖️</span>부모님 심의 & 칭찬 센터</h2>
+        <h2 class="text-sm font-black text-white flex items-center gap-2"><span class="text-xl">⚖️</span>부모님 심의 & 칭찬 센터</h2>
         <p class="text-xs text-slate-500 mt-1 leading-relaxed">아이가 완료 제출한 퀘스트를 검토하고, 따뜻한 칭찬 한마디와 함께 포인트를 승인해 주세요!</p>
       </div>
       <div id="approve-list" class="space-y-3"></div>
@@ -1146,7 +1235,7 @@
         <div class="flex items-start justify-between">
           <div class="flex-1 min-w-0 pr-3">
             <span id="qm-cat" class="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md">일일</span>
-            <h3 id="qm-title" class="text-lg font-black text-slate-900 mt-1">퀘스트 제목</h3>
+            <h3 id="qm-title" class="text-lg font-black text-white mt-1">퀘스트 제목</h3>
             <p id="qm-desc" class="text-xs text-slate-500 mt-0.5 leading-relaxed"></p>
           </div>
           <span id="qm-pts" class="text-base font-black text-indigo-600 flex-shrink-0">+300 P</span>
@@ -1155,7 +1244,7 @@
         <!-- Photo Upload (2~3장) -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <label class="text-xs font-bold text-slate-700">📸 인증 사진 첨부 <span class="text-red-500">*</span></label>
+            <label class="text-xs font-bold text-slate-200">📸 인증 사진 첨부 <span class="text-red-500">*</span></label>
             <span id="photo-count" class="text-[11px] font-semibold text-slate-400">0 / 3장</span>
           </div>
           <p class="text-[11px] text-slate-400 leading-relaxed -mt-1">최소 2장, 최대 3장 업로드해주세요.</p>
@@ -1168,7 +1257,7 @@
 
         <!-- Memo -->
         <div class="space-y-1.5">
-          <label class="text-xs font-bold text-slate-700">💬 소감 (선택)</label>
+          <label class="text-xs font-bold text-slate-200">💬 소감 (선택)</label>
           <textarea id="qm-memo" rows="2" placeholder="퀘스트를 완료하고 느낀 점을 적어봐요!" class="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50 resize-none"></textarea>
         </div>
 
@@ -1189,7 +1278,7 @@
   <div id="pin-modal" class="modal-bg center hidden" onclick="if(event.target===this)closePinModal()">
     <div class="sheet-center p-6 space-y-4 text-center">
       <div class="text-4xl">🔐</div>
-      <h3 class="text-base font-black text-slate-900">부모님 인증 PIN</h3>
+      <h3 class="text-base font-black text-white">부모님 인증 PIN</h3>
       <p class="text-xs text-slate-500">부모님 전용 모드입니다. PIN 번호 4자리를 입력해 주세요.</p>
       <div id="pin-name-row" class="flex gap-2 justify-center">
         <button type="button" onclick="setPinTarget('mom')" id="pin-btn-mom" class="tap flex-1 py-2 rounded-xl border-2 border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold">👩 엄마</button>
@@ -1211,7 +1300,7 @@
     <div id="profile-sheet" class="sheet">
       <div class="grabber"></div>
       <div class="px-6 pb-6 space-y-3">
-        <h3 class="text-sm font-black text-slate-900 mb-1">사용자 프로필 선택</h3>
+        <h3 class="text-sm font-black text-white mb-1">사용자 프로필 선택</h3>
         <div id="profile-list" class="space-y-2"></div>
         <button type="button" onclick="openApiConfigModal()" class="tap w-full p-3 rounded-2xl border border-dashed border-slate-300 flex items-center justify-between text-slate-600 hover:bg-slate-50 text-xs font-bold mt-1">
           <span class="flex items-center gap-1.5"><span>⚙️</span><span>Apps Script API 주소 연동</span></span>
@@ -1229,7 +1318,7 @@
     <div class="sheet-center p-6 space-y-4 text-left">
       <div class="flex items-center gap-2">
         <span class="text-2xl">⚙️</span>
-        <h3 class="text-base font-black text-slate-900">Apps Script API 주소</h3>
+        <h3 class="text-base font-black text-white">Apps Script API 주소</h3>
       </div>
       <p class="text-xs text-slate-500 leading-relaxed">GitHub Pages 등 외부에서 구글 스프레드시트와 연동할 Apps Script 웹앱 배포 URL을 입력하세요.</p>
       <input type="text" id="api-url-input" placeholder="https://script.google.com/macros/s/.../exec" class="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50 font-mono">
@@ -1438,7 +1527,7 @@
           '<span class="text-2xl flex-shrink-0">' + (q.icon || "⭐") + '</span>' +
           '<div class="min-w-0">' +
             '<div class="flex items-center gap-1.5 flex-wrap">' +
-              '<h4 class="font-extrabold text-sm text-slate-900">' + esc(q.title) + '</h4>' +
+              '<h4 class="font-extrabold text-sm text-white">' + esc(q.title) + '</h4>' +
               '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded ' + catColor + '">' + cat + '</span>' +
             '</div>' +
             (q.desc ? '<p class="text-xs text-slate-400 mt-0.5 truncate">' + esc(q.desc) + '</p>' : '') +
@@ -1467,7 +1556,7 @@
       return '<div class="card p-4 flex items-center gap-3">' +
         '<span class="text-3xl flex-shrink-0">' + (item.icon || "🎁") + '</span>' +
         '<div class="flex-1 min-w-0">' +
-          '<h4 class="font-extrabold text-sm text-slate-900">' + esc(item.title) + '</h4>' +
+          '<h4 class="font-extrabold text-sm text-white">' + esc(item.title) + '</h4>' +
           (item.desc ? '<p class="text-xs text-slate-400 mt-0.5">' + esc(item.desc) + '</p>' : '') +
         '</div>' +
         '<button type="button" onclick="redeemAction(\'' + esc(item.id) + '\',\'' + esc(item.title) + '\',' + item.cost + ',\'' + esc(item.icon||'🎁') + '\')" ' +
@@ -1499,7 +1588,7 @@
       return '<div class="card p-4 flex items-center gap-3 ' + (used ? "opacity-60" : "") + '">' +
         '<span class="text-3xl flex-shrink-0">' + (item.icon || "🎁") + '</span>' +
         '<div class="flex-1 min-w-0">' +
-          '<h4 class="font-extrabold text-sm text-slate-900">' + esc(item.rewardTitle) + '</h4>' +
+          '<h4 class="font-extrabold text-sm text-white">' + esc(item.rewardTitle) + '</h4>' +
           '<p class="text-xs text-slate-400 mt-0.5">획득: ' + (item.acquiredAt || "") + '</p>' +
         '</div>' +
         '<div class="flex flex-col items-end gap-1.5">' +
@@ -1559,7 +1648,7 @@
 
       return '<div class="card p-4 space-y-2.5">' +
         '<div class="flex items-center justify-between">' +
-          '<h4 class="font-extrabold text-sm text-slate-900 flex-1 pr-2">' + esc(title) + '</h4>' +
+          '<h4 class="font-extrabold text-sm text-white flex-1 pr-2">' + esc(title) + '</h4>' +
           '<div class="flex items-center gap-2 flex-shrink-0">' +
             '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + badgeCls + '">' + badgeTxt + '</span>' +
             '<span class="text-xs font-black text-emerald-600">+' + num(points) + ' P</span>' +
@@ -1579,8 +1668,8 @@
       document.getElementById("hist-page-info").textContent = histPage + " / " + totalPages;
       document.getElementById("hist-prev").disabled = (histPage === 1);
       document.getElementById("hist-next").disabled = (histPage === totalPages);
-      document.getElementById("hist-prev").className = "tap px-3.5 py-2 rounded-xl text-xs font-bold " + (histPage === 1 ? "bg-slate-100 text-slate-400 opacity-50" : "bg-white border border-slate-200 text-slate-700 shadow-sm");
-      document.getElementById("hist-next").className = "tap px-3.5 py-2 rounded-xl text-xs font-bold " + (histPage >= totalPages ? "bg-slate-100 text-slate-400 opacity-50" : "bg-white border border-slate-200 text-slate-700 shadow-sm");
+      document.getElementById("hist-prev").className = "tap px-3.5 py-2 rounded-xl text-xs font-bold " + (histPage === 1 ? "bg-slate-100 text-slate-400 opacity-50" : "bg-slate-800 border border-slate-700 text-slate-200 shadow-sm");
+      document.getElementById("hist-next").className = "tap px-3.5 py-2 rounded-xl text-xs font-bold " + (histPage >= totalPages ? "bg-slate-100 text-slate-400 opacity-50" : "bg-slate-800 border border-slate-700 text-slate-200 shadow-sm");
     } else {
       pag.classList.add("hidden");
     }
@@ -1635,7 +1724,7 @@
           '<span class="text-xs font-black text-indigo-600">+' + num(points) + ' P</span>' +
         '</div>' +
         '<div>' +
-          '<h4 class="text-sm font-extrabold text-slate-900">' + esc(title) + '</h4>' +
+          '<h4 class="text-sm font-extrabold text-white">' + esc(title) + '</h4>' +
           (log.date ? '<p class="text-[11px] text-slate-400 mt-0.5">📅 ' + log.date + '</p>' : '') +
         '</div>' +
         (log.memo ? '<div class="bg-slate-50 rounded-xl p-2.5 text-xs text-slate-700 border border-slate-100"><strong>💬 아이 소감:</strong> ' + esc(log.memo) + '</div>' : '') +
@@ -1946,7 +2035,7 @@
         '<div class="flex items-center gap-3">' +
           '<span class="text-2xl">' + (p.icon || "🧒") + '</span>' +
           '<div class="text-left">' +
-            '<p class="text-sm font-extrabold text-slate-900">' + esc(p.name) + '</p>' +
+            '<p class="text-sm font-extrabold text-white">' + esc(p.name) + '</p>' +
             '<p class="text-[11px] text-slate-400">' + (isParent ? "부모 모드 (심의 & 승인)" : "아이 모드 (퀘스트 수행)") + '</p>' +
           '</div>' +
         '</div>' +
