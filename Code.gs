@@ -11,8 +11,10 @@
  * 🔑 승인자 PIN은 Users 시트 PIN 컬럼에서 읽어옴
  */
 
-const SPREADSHEET_ID = "1qEMF1AJZZzKaLm__hN_gXq_y5e95JuecwH3rFBj2uIw";
-const FOLDER_ID      = "1d-KI3hOXBgnZSWlu4qHG8V_634EpWTyT";
+// ⚠️ 김가네 용돈퀘스트 스프레드시트 ID (교체 완료)
+// Spreadsheet URL: https://docs.google.com/spreadsheets/d/1GWeFz6kLzZSPz_XBhwO7cT69jSL2G5J4aWSC6EF1Hb4/edit
+const SPREADSHEET_ID = "1GWeFz6kLzZSPz_XBhwO7cT69jSL2G5J4aWSC6EF1Hb4";
+const FOLDER_ID      = "";  // 사진 저장 폴더 ID (비워두면 자동 생성)
 const FOLDER_NAME    = "FamilyQuest_Uploads";
 const XP_PER_LEVEL   = 2500;
 
@@ -211,7 +213,7 @@ function getAppData() {
 
     // 아이 프로필 (CHILD)
     var childProfile = profiles.find(function(p) { return p.role === "CHILD"; }) || {
-      id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD", pin: "", points: 7400, totalExp: 7400, icon: "🧒"
+      id: "child_1", name: "우리아이 (용사)", role: "CHILD", pin: "", points: 0, totalExp: 0, icon: "🧒"
     };
 
     var totalXp = childProfile.totalExp || childProfile.points || 0;
@@ -476,33 +478,45 @@ function completeQuest(data) {
     var isParent = data.isParent || false;
     var status   = isParent ? "APPROVED" : "PENDING";
 
-    // QuestLogs 시트에 추가
-    var logsSheet = findOrCreateSheet(ss, "QuestLogs", [
-      "LogId","QuestId","QuestTitle","UserId","SubmittedAt","Status","PhotoUrl","Memo","ParentComment","ApprovedBy"
-    ]);
+    // QuestLogs 시트에 추가 (컬럼 헤더 동적 위치 매핑)
+    var defaultHeaders = ["LogId","QuestId","QuestTitle","UserId","SubmittedAt","Status","PhotoUrl","Memo","ParentComment","ApprovedBy"];
+    var logsSheet = findOrCreateSheet(ss, "QuestLogs", defaultHeaders);
+    
+    var existingHeaders = logsSheet.getRange(1, 1, 1, Math.max(1, logsSheet.getLastColumn())).getValues()[0];
+    var headers = existingHeaders.map(function(h) {
+      return String(h || "").trim();
+    });
+    if (headers.length === 0 || !headers[0]) {
+      headers = defaultHeaders;
+    }
 
-    logsSheet.appendRow([
-      logId,
-      data.questId   || "CUSTOM",
-      data.title     || "퀘스트 완료",
-      data.userId    || "child_1",
-      nowStr,
-      status,
-      photoStr,
-      data.memo      || "",
-      "",
-      ""
-    ]);
+    var newRow = headers.map(function(h) {
+      var clean = String(h).replace(/[^a-zA-Z0-9가-힣]/g, "").toLowerCase();
+      if (clean === "logid" || clean === "id") return logId;
+      if (clean === "questid") return data.questId || "CUSTOM";
+      if (clean === "questtitle" || clean === "title" || clean === "퀘스트명" || clean === "제목") return data.title || "퀘스트 완료";
+      if (clean === "userid" || clean === "아이디") return data.userId || "child_1";
+      if (clean === "submittedat" || clean === "completedat" || clean === "date" || clean === "일시" || clean === "날짜") return nowStr;
+      if (clean === "status" || clean === "상태") return status;
+      if (clean === "photourl" || clean === "photo" || clean === "사진" || clean === "인증사진") return photoStr;
+      if (clean === "memo" || clean === "소감" || clean === "메모") return data.memo || "";
+      if (clean === "parentcomment" || clean === "comment" || clean === "칭찬") return "";
+      if (clean === "approvedby" || clean === "승인자") return isParent ? (data.approvedBy || "부모님") : "";
+      return "";
+    });
 
-    // APPROVED이면 포인트/XP 즉시 반영
+    logsSheet.appendRow(newRow);
+
+    // APPROVED이면 포인트/XP 즉시 반영 및 공룡 미니게임 획득권 활성화
     if (isParent) {
       updateChildPoints(ss, data.userId || "child_1", Number(data.points) || 0);
+      grantDinoGameTicket(ss, data.userId || "child_1");
     }
 
     return {
       success: true,
       message: isParent
-        ? "🎉 퀘스트 완료 승인! +" + (data.points || 0) + " P"
+        ? "🎉 퀘스트 완료 승인 및 🦖 공룡 미니게임 획득권 활성화! +" + (data.points || 0) + " P"
         : "📤 퀘스트 제출 완료! ⚖️ 부모님 심의 대기 중입니다.",
       appData: getAppData()
     };
@@ -530,6 +544,7 @@ function approveQuest(data) {
       return String(h || "").trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
     });
 
+    var logIdCol = headers.indexOf("logid") !== -1 ? headers.indexOf("logid") : 0;
     var statusCol = headers.indexOf("status") !== -1 ? headers.indexOf("status") + 1 : (headers.indexOf("상태") !== -1 ? headers.indexOf("상태") + 1 : 6);
     var commentCol = headers.indexOf("parentcomment") !== -1 ? headers.indexOf("parentcomment") + 1
                    : headers.indexOf("comment") !== -1 ? headers.indexOf("comment") + 1
@@ -542,7 +557,7 @@ function approveQuest(data) {
 
     var foundRow = -1;
     for (var r = 1; r < allValues.length; r++) {
-      if (String(allValues[r][0]).trim() === String(data.logId).trim()) {
+      if (String(allValues[r][logIdCol]).trim() === String(data.logId).trim()) {
         foundRow = r + 1;
         break;
       }
@@ -556,9 +571,12 @@ function approveQuest(data) {
       // 포인트 반영
       var pts = Number(data.points) || 0;
       if (pts > 0) updateChildPoints(ss, data.userId || "child_1", pts);
+
+      // 공룡 미니 게임 획득권 지급 및 활성화
+      grantDinoGameTicket(ss, data.userId || "child_1");
     }
 
-    return { success: true, message: "✅ 승인 완료! 포인트가 지급되었습니다.", appData: getAppData() };
+    return { success: true, message: "✅ 승인 완료! 포인트 지급 및 🦖 공룡 미니게임 획득권이 활성화되었습니다.", appData: getAppData() };
   } catch(err) {
     return { success: false, error: err.toString() };
   }
@@ -678,6 +696,33 @@ function updateChildPoints(ss, userId, delta) {
 }
 
 // ────────────────────────────────────────────────
+// 공룡 미니게임 획득권 자동 지급 및 활성화
+// ────────────────────────────────────────────────
+function grantDinoGameTicket(ss, userId) {
+  try {
+    var tz  = Session.getScriptTimeZone();
+    var now = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd HH:mm:ss");
+    var invId = "INV_DINO_" + Utilities.formatDate(new Date(), tz, "yyyyMMdd_HHmmss");
+
+    var invSheet = findOrCreateSheet(ss, "Inventory", [
+      "InvId","UserId","RewardId","RewardTitle","AcquiredAt","Status","Icon"
+    ]);
+
+    invSheet.appendRow([
+      invId,
+      userId || "child_1",
+      "R_DINO_GAME",
+      "🦖 공룡 미니게임 획득권",
+      now,
+      "ACTIVE",
+      "🦖"
+    ]);
+  } catch(err) {
+    Logger.log("grantDinoGameTicket error: " + err);
+  }
+}
+
+// ────────────────────────────────────────────────
 // 기본 데이터 (시트 비어있을 때)
 // ────────────────────────────────────────────────
 function getDefaultQuests() {
@@ -694,6 +739,7 @@ function getDefaultQuests() {
 
 function getDefaultShopItems() {
   return [
+    { id: "R-000", title: "🦖 공룡 미니게임 획득권",           cost: 500,  category: "게임",     icon: "🦖", desc: "퀘스트 승인 시 자동 활성화되는 신나는 공룡 미니게임 입장권" },
     { id: "R-001", title: "🎮 주말 게임 30분 쿠폰",            cost: 1500, category: "자유시간", icon: "🎮", desc: "스마트폰/콘솔 게임 30분 추가 자유 이용권" },
     { id: "R-002", title: "🍦 베스킨라빈스 싱글팅 아이스크림", cost: 3000, category: "간식",     icon: "🍦", desc: "좋아하는 맛 아이스크림 1개 보상 교환" },
     { id: "R-003", title: "💰 용돈 3,000원 현금 환전",         cost: 3000, category: "용돈",     icon: "💵", desc: "모은 포인트를 즉시 3천원 현금 용돈으로 교환!" },
@@ -705,17 +751,17 @@ function getDefaultShopItems() {
 function getFallbackData() {
   return {
     profiles:   [
-      { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  pin: "",     points: 7400, totalExp: 7400, icon: "🧒" },
-      { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", pin: "1121", points: 0,    totalExp: 0,    icon: "👩" },
-      { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", pin: "7590", points: 0,    totalExp: 0,    icon: "👨" }
+      { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  pin: "",     points: 0, totalExp: 0, icon: "🧒" },
+      { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", pin: "1121", points: 0, totalExp: 0, icon: "👩" },
+      { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", pin: "7590", points: 0, totalExp: 0, icon: "👨" }
     ],
     parentPins: { mom: "1121", dad: "7590" },
     child: {
       id: "child_1", name: "상급종합빡빡이(용사)", icon: "🧒",
-      level: 3, title: "⭐ 든든한 퀘스트 챔피언",
-      totalExp: 7400, currentBalance: 7400,
+      level: 1, title: "🌱 새내기 견습 모험가",
+      totalExp: 0, currentBalance: 0,
       targetItem: "🎮 플레이스테이션", targetPoints: 100000,
-      progressPct: 8, lvProgress: 2400, nextLvXp: 2500
+      progressPct: 0, lvProgress: 0, nextLvXp: 2500
     },
     quests:         getDefaultQuests(),
     shopItems:      getDefaultShopItems(),
@@ -724,3 +770,4 @@ function getFallbackData() {
     inventory:      []
   };
 }
+
