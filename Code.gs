@@ -11,10 +11,8 @@
  * 🔑 승인자 PIN은 Users 시트 PIN 컬럼에서 읽어옴
  */
 
-// ⚠️ 김가네 용돈퀘스트 스프레드시트 ID (교체 완료)
-// Spreadsheet URL: https://docs.google.com/spreadsheets/d/1GWeFz6kLzZSPz_XBhwO7cT69jSL2G5J4aWSC6EF1Hb4/edit
-const SPREADSHEET_ID = "1GWeFz6kLzZSPz_XBhwO7cT69jSL2G5J4aWSC6EF1Hb4";
-const FOLDER_ID      = "";  // 사진 저장 폴더 ID (비워두면 자동 생성)
+const SPREADSHEET_ID = "1qEMF1AJZZzKaLm__hN_gXq_y5e95JuecwH3rFBj2uIw";
+const FOLDER_ID      = "1d-KI3hOXBgnZSWlu4qHG8V_634EpWTyT";
 const FOLDER_NAME    = "FamilyQuest_Uploads";
 const XP_PER_LEVEL   = 2500;
 
@@ -213,7 +211,7 @@ function getAppData() {
 
     // 아이 프로필 (CHILD)
     var childProfile = profiles.find(function(p) { return p.role === "CHILD"; }) || {
-      id: "child_1", name: "우리아이 (용사)", role: "CHILD", pin: "", points: 0, totalExp: 0, icon: "🧒"
+      id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD", pin: "", points: 7400, totalExp: 7400, icon: "🧒"
     };
 
     var totalXp = childProfile.totalExp || childProfile.points || 0;
@@ -406,12 +404,12 @@ function getAppData() {
     var parentPins = {};
     profiles.filter(function(p) { return p.role === "PARENT"; }).forEach(function(p) {
       if (p.pin) parentPins[p.id] = p.pin;
-      if (p.name.includes("엄마") || p.name.toLowerCase() === "mom") parentPins["mom"] = p.pin || "1234";
-      if (p.name.includes("아빠") || p.name.toLowerCase() === "dad") parentPins["dad"] = p.pin || "5678";
+      if (p.name.includes("엄마") || p.name.toLowerCase() === "mom") parentPins["mom"] = p.pin || "1121";
+      if (p.name.includes("아빠") || p.name.toLowerCase() === "dad") parentPins["dad"] = p.pin || "7590";
     });
     // 폴백
-    if (!parentPins["mom"]) parentPins["mom"] = "1234";
-    if (!parentPins["dad"]) parentPins["dad"] = "5678";
+    if (!parentPins["mom"]) parentPins["mom"] = "1121";
+    if (!parentPins["dad"]) parentPins["dad"] = "7590";
 
     return {
       profiles:       profiles,
@@ -707,17 +705,17 @@ function getDefaultShopItems() {
 function getFallbackData() {
   return {
     profiles:   [
-      { id: "child_1", name: "우리아이 (용사)",    role: "CHILD",  pin: "",     points: 0, totalExp: 0, icon: "🧒" },
-      { id: "mom",     name: "엄마 (길드마스터)",  role: "PARENT", pin: "1234", points: 0, totalExp: 0, icon: "👩" },
-      { id: "dad",     name: "아빠 (대마법사)",    role: "PARENT", pin: "5678", points: 0, totalExp: 0, icon: "👨" }
+      { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  pin: "",     points: 7400, totalExp: 7400, icon: "🧒" },
+      { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", pin: "1121", points: 0,    totalExp: 0,    icon: "👩" },
+      { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", pin: "7590", points: 0,    totalExp: 0,    icon: "👨" }
     ],
-    parentPins: { mom: "1234", dad: "5678" },
+    parentPins: { mom: "1121", dad: "7590" },
     child: {
-      id: "child_1", name: "우리아이 (용사)", icon: "🧒",
-      level: 1, title: "🌱 새내기 견습 모험가",
-      totalExp: 0, currentBalance: 0,
+      id: "child_1", name: "상급종합빡빡이(용사)", icon: "🧒",
+      level: 3, title: "⭐ 든든한 퀘스트 챔피언",
+      totalExp: 7400, currentBalance: 7400,
       targetItem: "🎮 플레이스테이션", targetPoints: 100000,
-      progressPct: 0, lvProgress: 0, nextLvXp: 2500
+      progressPct: 8, lvProgress: 2400, nextLvXp: 2500
     },
     quests:         getDefaultQuests(),
     shopItems:      getDefaultShopItems(),
@@ -726,4 +724,3 @@ function getFallbackData() {
     inventory:      []
   };
 }
-
