@@ -1388,18 +1388,17 @@
           <span id="qm-pts" class="text-base font-black text-indigo-600 flex-shrink-0">+300 P</span>
         </div>
 
-        <!-- Photo Upload (2~3장) -->
+        <!-- Photo Upload (선택 사항, 최대 3장) -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <label class="text-xs font-bold text-slate-200">📸 인증 사진 첨부 <span class="text-red-500">*</span></label>
+            <label class="text-xs font-bold text-slate-200">📸 인증 사진 첨부 <span class="text-slate-400 font-normal">(선택)</span></label>
             <span id="photo-count" class="text-[11px] font-semibold text-slate-400">0 / 3장</span>
           </div>
-          <p class="text-[11px] text-slate-400 leading-relaxed -mt-1">최소 2장, 최대 3장 업로드해주세요.</p>
+          <p class="text-[11px] text-slate-400 leading-relaxed -mt-1">사진이 없어도 제출할 수 있어요. (최대 3장)</p>
           <div id="photo-grid" class="grid grid-cols-3 gap-2">
             <!-- JS render -->
           </div>
-          <!-- Validation hint -->
-          <p id="photo-hint" class="text-[11px] text-red-500 font-semibold hidden">📸 사진을 2장 이상 첨부해주세요.</p>
+          <p id="photo-hint" class="text-[11px] text-red-500 font-semibold hidden"></p>
         </div>
 
         <!-- Memo -->
@@ -1977,11 +1976,6 @@
   // ─── Submit Quest ────────────────────────────────────────────────
   function submitQuestAction() {
     if (!selectedQuest) return;
-
-    if (selectedPhotos.length < 2) {
-      document.getElementById("photo-hint").classList.remove("hidden");
-      return;
-    }
 
     var btn = document.getElementById("qm-submit-btn");
     btn.innerHTML = '<span class="spinner"></span><span>제출 중...</span>';
