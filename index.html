@@ -6,8 +6,814 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>용돈 퀘스트 | FamilyQuest</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <script src="https://cdn.tailwindcss.com">
+  // =================================================================
+  // 🦖 CHROME DINO RUNNER ARCADE GAME ENGINE (1-GAME STRICT LIMIT)
+  // =================================================================
+  var dinoGameRunning = false;
+  var dinoGameLoopId = null;
+  var dinoScore = 0;
+  var dinoHighScore = parseInt(localStorage.getItem('dino_hi_score') || '0');
+  var dinoAudioCtx = null;
+
+  // Sound generator via Web Audio API (100% Native & Offline)
+  function playBeep(freq, type, duration) {
+    try {
+      if (!dinoAudioCtx) dinoAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (dinoAudioCtx.state === 'suspended') dinoAudioCtx.resume();
+      var osc = dinoAudioCtx.createOscillator();
+      var gain = dinoAudioCtx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, dinoAudioCtx.currentTime);
+      gain.gain.setValueAtTime(0.1, dinoAudioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, dinoAudioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(dinoAudioCtx.destination);
+      osc.start();
+      osc.stop(dinoAudioCtx.currentTime + duration);
+    } catch(e) {}
+  }
+
+  function getDinoTickets() {
+    return parseInt(localStorage.getItem('dino_game_tickets') || '0');
+  }
+
+  function updateDinoBanner() {
+    var tickets = getDinoTickets();
+    var bannerEl = document.getElementById('dino-ticket-banner');
+    var hdrBtn = document.getElementById('hdr-game-btn');
+    var hdrText = document.getElementById('hdr-ticket-text');
+
+    if (hdrBtn) {
+      if (tickets > 0) {
+        hdrBtn.classList.remove('hidden');
+        if (hdrText) hdrText.textContent = '게임 ' + tickets + '판';
+      } else {
+        hdrBtn.classList.add('hidden');
+      }
+    }
+
+    if (!bannerEl) return;
+
+    if (tickets > 0) {
+      bannerEl.innerHTML = '<div class="card p-4 bg-gradient-to-r from-violet-950 via-purple-900 to-slate-900 border-2 border-amber-400 text-white rounded-2xl shadow-xl flex items-center justify-between relative overflow-hidden">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="w-12 h-12 bg-amber-400/20 border border-amber-400/40 rounded-xl flex items-center justify-center text-2xl animate-bounce">🦖</div>' +
+          '<div>' +
+            '<div class="flex items-center gap-1.5">' +
+              '<span class="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-md">보너스 획득!</span>' +
+              '<span class="text-xs font-black text-amber-300">티켓 <b class="text-sm">' + tickets + '</b>장 보유</span>' +
+            '</div>' +
+            '<div class="text-sm font-black text-white mt-0.5">공룡 점프 게임 (딱 1판!)</div>' +
+          '</div>' +
+        '</div>' +
+        '<button type="button" onclick="openDinoGameModal()" class="tap px-4 py-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 rounded-xl text-xs font-black shadow-md shadow-amber-400/30 flex items-center gap-1 hover:brightness-110">' +
+          '<span>🎮 지금 시작</span>' +
+        '</button>' +
+      '</div>';
+    } else {
+      bannerEl.innerHTML = '<div class="card p-3.5 bg-slate-900/70 border border-slate-800 text-slate-400 rounded-2xl flex items-center justify-between">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-xl opacity-60">🦖</div>' +
+          '<div>' +
+            '<div class="text-xs font-bold text-slate-300">공룡 달리기 미니게임 (남은 티켓: 0장)</div>' +
+            '<div class="text-[11px] text-slate-500">퀘스트를 완료하고 부모님께 승인받으면 1판 획득!</div>' +
+          '</div>' +
+        '</div>' +
+        '<button type="button" onclick="showToast(\'💡 퀘스트를 완료하고 부모님께 승인을 받으면 게임 티켓이 1장 지급돼요!\', 3000)" class="tap px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-400 rounded-xl text-xs font-bold">' +
+          '🔒 잠김' +
+        '</button>' +
+      '</div>';
+    }
+  }
+
+  function openDinoGameModal() {
+    var tickets = getDinoTickets();
+    var modal = document.getElementById('dino-game-modal');
+    modal.classList.remove('hidden');
+
+    document.getElementById('dino-hi-score').textContent = String(dinoHighScore).padStart(5, '0');
+    document.getElementById('dino-cur-score').textContent = '00000';
+    document.getElementById('dino-modal-tickets').textContent = tickets;
+
+    document.getElementById('dino-start-overlay').classList.remove('hidden');
+    document.getElementById('dino-gameover-overlay').classList.add('hidden');
+
+    initDinoCanvas();
+  }
+
+  function closeDinoGameModal() {
+    if (dinoGameLoopId) cancelAnimationFrame(dinoGameLoopId);
+    dinoGameRunning = false;
+    document.getElementById('dino-game-modal').classList.add('hidden');
+    updateDinoBanner();
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('play_dino') || urlParams.has('game')) {
+      if (getDinoTickets() <= 0) {
+        localStorage.setItem('dino_game_tickets', '1');
+        updateDinoBanner();
+      }
+      setTimeout(openDinoGameModal, 400);
+    }
+  }
+
+  // Dino Physics & Entities
+  var dino = { x: 40, y: 130, w: 26, h: 32, vy: 0, jumpPower: -9.5, gravity: 0.48, grounded: true, leg: 0 };
+  var obstacles = [];
+  var clouds = [];
+  var groundOffset = 0;
+  var gameSpeed = 3.5;
+  var spawnTimer = 0;
+
+  function initDinoCanvas() {
+    var canvas = document.getElementById('dinoCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+
+    dino.y = 130;
+    dino.vy = 0;
+    dino.grounded = true;
+    obstacles = [];
+    clouds = [{ x: 80, y: 30 }, { x: 220, y: 45 }, { x: 340, y: 25 }];
+    gameSpeed = 3.5;
+    dinoScore = 0;
+
+    // Draw initial idle frame
+    drawDinoScene(ctx);
+  }
+
+  function startDinoGame() {
+    var tickets = getDinoTickets();
+    if (tickets <= 0) {
+      showToast("⚠️ 남은 티켓이 없습니다! 퀘스트 승인 후 이용 가능합니다.", 3000);
+      return;
+    }
+
+    document.getElementById('dino-start-overlay').classList.add('hidden');
+    document.getElementById('dino-gameover-overlay').classList.add('hidden');
+
+    initDinoCanvas();
+    dinoGameRunning = true;
+    playBeep(440, 'square', 0.1);
+
+    var canvas = document.getElementById('dinoCanvas');
+    var ctx = canvas.getContext('2d');
+    var lastTime = performance.now();
+
+    function loop(now) {
+      if (!dinoGameRunning) return;
+      var dt = Math.min(32, now - lastTime);
+      lastTime = now;
+
+      updateDino(dt);
+      drawDinoScene(ctx);
+
+      dinoGameLoopId = requestAnimationFrame(loop);
+    }
+    dinoGameLoopId = requestAnimationFrame(loop);
+  }
+
+  function triggerDinoJump() {
+    if (!dinoGameRunning) {
+      var startOverlay = document.getElementById('dino-start-overlay');
+      if (!startOverlay.classList.contains('hidden')) {
+        startDinoGame();
+        return;
+      }
+    }
+    if (dino.grounded && dinoGameRunning) {
+      dino.vy = dino.jumpPower;
+      dino.grounded = false;
+      playBeep(620, 'square', 0.08);
+    }
+  }
+
+  function updateDino(dt) {
+    // Jump physics
+    dino.vy += dino.gravity;
+    dino.y += dino.vy;
+    if (dino.y >= 130) {
+      dino.y = 130;
+      dino.vy = 0;
+      dino.grounded = true;
+    }
+
+    // Legs animation
+    dino.leg = (dino.leg + 0.2) % 2;
+
+    // Score & Speed
+    dinoScore += 0.2;
+    var curScoreInt = Math.floor(dinoScore);
+    document.getElementById('dino-cur-score').textContent = String(curScoreInt).padStart(5, '0');
+    if (curScoreInt > dinoHighScore) {
+      dinoHighScore = curScoreInt;
+      localStorage.setItem('dino_hi_score', dinoHighScore);
+      document.getElementById('dino-hi-score').textContent = String(dinoHighScore).padStart(5, '0');
+    }
+
+    // Milestone sound every 100 points
+    if (curScoreInt > 0 && curScoreInt % 100 === 0 && Math.floor(dinoScore - 0.2) % 100 !== 0) {
+      playBeep(880, 'square', 0.15);
+    }
+
+    gameSpeed = 3.5 + Math.min(3.5, curScoreInt / 250);
+
+    // Ground scroll
+    groundOffset = (groundOffset + gameSpeed) % 20;
+
+    // Clouds
+    clouds.forEach(function(c) {
+      c.x -= gameSpeed * 0.25;
+      if (c.x < -40) c.x = 420;
+    });
+
+    // Spawn Obstacles (Cactus or Pterodactyl)
+    spawnTimer += dt;
+    if (spawnTimer > (1400 / (gameSpeed / 3.5)) + Math.random() * 800) {
+      spawnTimer = 0;
+      var isBird = curScoreInt > 150 && Math.random() > 0.65;
+      if (isBird) {
+        obstacles.push({ x: 420, y: 105, w: 24, h: 16, type: 'bird', frame: 0 });
+      } else {
+        var isDouble = Math.random() > 0.6;
+        obstacles.push({ x: 420, y: 134, w: isDouble ? 22 : 14, h: 28, type: 'cactus' });
+      }
+    }
+
+    // Update Obstacles & Collision Check
+    for (var i = obstacles.length - 1; i >= 0; i--) {
+      var ob = obstacles[i];
+      ob.x -= gameSpeed;
+
+      // Hitbox check
+      var hitMargin = 4;
+      if (
+        dino.x + hitMargin < ob.x + ob.w - hitMargin &&
+        dino.x + dino.w - hitMargin > ob.x + hitMargin &&
+        dino.y + hitMargin < ob.y + ob.h - hitMargin &&
+        dino.y + dino.h - hitMargin > ob.y + hitMargin
+      ) {
+        handleDinoGameOver();
+        return;
+      }
+
+      if (ob.x < -30) obstacles.splice(i, 1);
+    }
+  }
+
+  function handleDinoGameOver() {
+    dinoGameRunning = false;
+    if (dinoGameLoopId) cancelAnimationFrame(dinoGameLoopId);
+    playBeep(180, 'sawtooth', 0.35);
+
+    // DEDUCT 1 TICKET IMMEDIATELY (Strict 1-play constraint)
+    var curTickets = getDinoTickets();
+    curTickets = Math.max(0, curTickets - 1);
+    localStorage.setItem('dino_game_tickets', curTickets);
+
+    var finalScore = Math.floor(dinoScore);
+    document.getElementById('dino-final-score').textContent = finalScore;
+    document.getElementById('dino-modal-tickets').textContent = curTickets;
+
+    var retryBtn = document.getElementById('btn-dino-retry');
+    var msgEl = document.getElementById('dino-over-msg');
+
+    if (curTickets > 0) {
+      retryBtn.classList.remove('hidden');
+      retryBtn.textContent = '🎮 남은 티켓(' + curTickets + '장)으로 계속하기';
+      msgEl.textContent = '아쉽게 부딪혔어! 하지만 아직 티켓이 남아있어!';
+    } else {
+      retryBtn.classList.add('hidden');
+      msgEl.textContent = '멋진 질주였어! 다음 퀘스트를 완료하고 부모님께 승인받으면 또 1판 달릴 수 있어! ⚡';
+    }
+
+    document.getElementById('dino-gameover-overlay').classList.remove('hidden');
+    updateDinoBanner();
+  }
+
+  function retryDinoGame() {
+    var tickets = getDinoTickets();
+    if (tickets <= 0) {
+      showToast("⚠️ 티켓이 모두 소진되었습니다!", 3000);
+      return;
+    }
+    startDinoGame();
+  }
+
+  function drawDinoScene(ctx) {
+    ctx.fillStyle = '#0B0F19';
+    ctx.fillRect(0, 0, 400, 180);
+
+    // Stars / Sparkles in night sky
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.fillRect(40, 20, 2, 2);
+    ctx.fillRect(120, 15, 2, 2);
+    ctx.fillRect(190, 35, 1.5, 1.5);
+    ctx.fillRect(280, 18, 2, 2);
+    ctx.fillRect(350, 40, 2, 2);
+
+    // Clouds
+    ctx.fillStyle = '#1E293B';
+    clouds.forEach(function(c) {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 10, 0, Math.PI * 2);
+      ctx.arc(c.x + 10, c.y - 4, 12, 0, Math.PI * 2);
+      ctx.arc(c.x + 22, c.y, 10, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Ground line
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 162);
+    ctx.lineTo(400, 162);
+    ctx.stroke();
+
+    // Ground dots
+    ctx.fillStyle = '#475569';
+    for (var x = -groundOffset; x < 400; x += 18) {
+      ctx.fillRect(x, 165, 3, 2);
+      if (x % 36 === 0) ctx.fillRect(x + 8, 168, 4, 2);
+    }
+
+    // Draw Obstacles
+    obstacles.forEach(function(ob) {
+      if (ob.type === 'cactus') {
+        ctx.fillStyle = '#10B981'; // Cyber emerald cactus
+        ctx.fillRect(ob.x + 4, ob.y, ob.w - 8, ob.h);
+        // Arms
+        ctx.fillRect(ob.x, ob.y + 6, 4, 10);
+        ctx.fillRect(ob.x + ob.w - 4, ob.y + 10, 4, 10);
+      } else {
+        // Pterodactyl (Bird)
+        ctx.fillStyle = '#F59E0B'; // Gold bird
+        ctx.fillRect(ob.x, ob.y, ob.w, ob.h - 6);
+        ctx.fillRect(ob.x + 6, ob.y - 4, 8, 4); // wing
+      }
+    });
+
+    // Draw T-Rex (Retro Pixel Dino)
+    ctx.fillStyle = '#A78BFA'; // Cyber neon purple T-Rex!
+    var dx = dino.x, dy = dino.y;
+    // Head & Snout
+    ctx.fillRect(dx + 12, dy, 14, 12);
+    ctx.fillRect(dx + 18, dy + 2, 8, 8);
+    // Eye (cutout)
+    ctx.fillStyle = '#0B0F19';
+    ctx.fillRect(dx + 15, dy + 2, 3, 3);
+    // Body
+    ctx.fillStyle = '#A78BFA';
+    ctx.fillRect(dx + 6, dy + 10, 14, 14);
+    // Tiny arm
+    ctx.fillRect(dx + 18, dy + 14, 4, 2);
+    // Tail
+    ctx.fillRect(dx, dy + 12, 6, 6);
+    ctx.fillRect(dx + 2, dy + 8, 4, 4);
+    // Legs
+    if (dino.grounded) {
+      if (Math.floor(dino.leg) === 0) {
+        ctx.fillRect(dx + 8, dy + 24, 3, 8);
+        ctx.fillRect(dx + 15, dy + 24, 3, 5);
+      } else {
+        ctx.fillRect(dx + 8, dy + 24, 3, 5);
+        ctx.fillRect(dx + 15, dy + 24, 3, 8);
+      }
+    } else {
+      // Jumping legs tucked
+      ctx.fillRect(dx + 8, dy + 24, 3, 5);
+      ctx.fillRect(dx + 14, dy + 24, 3, 5);
+    }
+  }
+
+  // Setup Event Listeners for Dino Game
+  window.addEventListener('load', function() {
+    updateDinoBanner();
+
+    var jumpBtn = document.getElementById('btn-dino-jump');
+    if (jumpBtn) {
+      jumpBtn.addEventListener('mousedown', function(e) { e.preventDefault(); triggerDinoJump(); });
+      jumpBtn.addEventListener('touchstart', function(e) { e.preventDefault(); triggerDinoJump(); }, { passive: false });
+    }
+
+    var canvas = document.getElementById('dinoCanvas');
+    if (canvas) {
+      canvas.addEventListener('mousedown', function(e) { e.preventDefault(); triggerDinoJump(); });
+      canvas.addEventListener('touchstart', function(e) { e.preventDefault(); triggerDinoJump(); }, { passive: false });
+    }
+
+    window.addEventListener('keydown', function(e) {
+      var modal = document.getElementById('dino-game-modal');
+      if (modal && !modal.classList.contains('hidden')) {
+        if (e.code === 'Space' || e.code === 'ArrowUp') {
+          e.preventDefault();
+          triggerDinoJump();
+        }
+      }
+    });
+  });
+
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js">
+  // =================================================================
+  // 🦖 CHROME DINO RUNNER ARCADE GAME ENGINE (1-GAME STRICT LIMIT)
+  // =================================================================
+  var dinoGameRunning = false;
+  var dinoGameLoopId = null;
+  var dinoScore = 0;
+  var dinoHighScore = parseInt(localStorage.getItem('dino_hi_score') || '0');
+  var dinoAudioCtx = null;
+
+  // Sound generator via Web Audio API (100% Native & Offline)
+  function playBeep(freq, type, duration) {
+    try {
+      if (!dinoAudioCtx) dinoAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (dinoAudioCtx.state === 'suspended') dinoAudioCtx.resume();
+      var osc = dinoAudioCtx.createOscillator();
+      var gain = dinoAudioCtx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, dinoAudioCtx.currentTime);
+      gain.gain.setValueAtTime(0.1, dinoAudioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, dinoAudioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(dinoAudioCtx.destination);
+      osc.start();
+      osc.stop(dinoAudioCtx.currentTime + duration);
+    } catch(e) {}
+  }
+
+  function getDinoTickets() {
+    return parseInt(localStorage.getItem('dino_game_tickets') || '0');
+  }
+
+  function updateDinoBanner() {
+    var tickets = getDinoTickets();
+    var bannerEl = document.getElementById('dino-ticket-banner');
+    var hdrBtn = document.getElementById('hdr-game-btn');
+    var hdrText = document.getElementById('hdr-ticket-text');
+
+    if (hdrBtn) {
+      if (tickets > 0) {
+        hdrBtn.classList.remove('hidden');
+        if (hdrText) hdrText.textContent = '게임 ' + tickets + '판';
+      } else {
+        hdrBtn.classList.add('hidden');
+      }
+    }
+
+    if (!bannerEl) return;
+
+    if (tickets > 0) {
+      bannerEl.innerHTML = '<div class="card p-4 bg-gradient-to-r from-violet-950 via-purple-900 to-slate-900 border-2 border-amber-400 text-white rounded-2xl shadow-xl flex items-center justify-between relative overflow-hidden">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="w-12 h-12 bg-amber-400/20 border border-amber-400/40 rounded-xl flex items-center justify-center text-2xl animate-bounce">🦖</div>' +
+          '<div>' +
+            '<div class="flex items-center gap-1.5">' +
+              '<span class="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-md">보너스 획득!</span>' +
+              '<span class="text-xs font-black text-amber-300">티켓 <b class="text-sm">' + tickets + '</b>장 보유</span>' +
+            '</div>' +
+            '<div class="text-sm font-black text-white mt-0.5">공룡 점프 게임 (딱 1판!)</div>' +
+          '</div>' +
+        '</div>' +
+        '<button type="button" onclick="openDinoGameModal()" class="tap px-4 py-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 rounded-xl text-xs font-black shadow-md shadow-amber-400/30 flex items-center gap-1 hover:brightness-110">' +
+          '<span>🎮 지금 시작</span>' +
+        '</button>' +
+      '</div>';
+    } else {
+      bannerEl.innerHTML = '<div class="card p-3.5 bg-slate-900/70 border border-slate-800 text-slate-400 rounded-2xl flex items-center justify-between">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-xl opacity-60">🦖</div>' +
+          '<div>' +
+            '<div class="text-xs font-bold text-slate-300">공룡 달리기 미니게임 (남은 티켓: 0장)</div>' +
+            '<div class="text-[11px] text-slate-500">퀘스트를 완료하고 부모님께 승인받으면 1판 획득!</div>' +
+          '</div>' +
+        '</div>' +
+        '<button type="button" onclick="showToast(\'💡 퀘스트를 완료하고 부모님께 승인을 받으면 게임 티켓이 1장 지급돼요!\', 3000)" class="tap px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-400 rounded-xl text-xs font-bold">' +
+          '🔒 잠김' +
+        '</button>' +
+      '</div>';
+    }
+  }
+
+  function openDinoGameModal() {
+    var tickets = getDinoTickets();
+    var modal = document.getElementById('dino-game-modal');
+    modal.classList.remove('hidden');
+
+    document.getElementById('dino-hi-score').textContent = String(dinoHighScore).padStart(5, '0');
+    document.getElementById('dino-cur-score').textContent = '00000';
+    document.getElementById('dino-modal-tickets').textContent = tickets;
+
+    document.getElementById('dino-start-overlay').classList.remove('hidden');
+    document.getElementById('dino-gameover-overlay').classList.add('hidden');
+
+    initDinoCanvas();
+  }
+
+  function closeDinoGameModal() {
+    if (dinoGameLoopId) cancelAnimationFrame(dinoGameLoopId);
+    dinoGameRunning = false;
+    document.getElementById('dino-game-modal').classList.add('hidden');
+    updateDinoBanner();
+  }
+
+  // Dino Physics & Entities
+  var dino = { x: 40, y: 130, w: 26, h: 32, vy: 0, jumpPower: -9.5, gravity: 0.48, grounded: true, leg: 0 };
+  var obstacles = [];
+  var clouds = [];
+  var groundOffset = 0;
+  var gameSpeed = 3.5;
+  var spawnTimer = 0;
+
+  function initDinoCanvas() {
+    var canvas = document.getElementById('dinoCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+
+    dino.y = 130;
+    dino.vy = 0;
+    dino.grounded = true;
+    obstacles = [];
+    clouds = [{ x: 80, y: 30 }, { x: 220, y: 45 }, { x: 340, y: 25 }];
+    gameSpeed = 3.5;
+    dinoScore = 0;
+
+    // Draw initial idle frame
+    drawDinoScene(ctx);
+  }
+
+  function startDinoGame() {
+    var tickets = getDinoTickets();
+    if (tickets <= 0) {
+      showToast("⚠️ 남은 티켓이 없습니다! 퀘스트 승인 후 이용 가능합니다.", 3000);
+      return;
+    }
+
+    document.getElementById('dino-start-overlay').classList.add('hidden');
+    document.getElementById('dino-gameover-overlay').classList.add('hidden');
+
+    initDinoCanvas();
+    dinoGameRunning = true;
+    playBeep(440, 'square', 0.1);
+
+    var canvas = document.getElementById('dinoCanvas');
+    var ctx = canvas.getContext('2d');
+    var lastTime = performance.now();
+
+    function loop(now) {
+      if (!dinoGameRunning) return;
+      var dt = Math.min(32, now - lastTime);
+      lastTime = now;
+
+      updateDino(dt);
+      drawDinoScene(ctx);
+
+      dinoGameLoopId = requestAnimationFrame(loop);
+    }
+    dinoGameLoopId = requestAnimationFrame(loop);
+  }
+
+  function triggerDinoJump() {
+    if (!dinoGameRunning) {
+      var startOverlay = document.getElementById('dino-start-overlay');
+      if (!startOverlay.classList.contains('hidden')) {
+        startDinoGame();
+        return;
+      }
+    }
+    if (dino.grounded && dinoGameRunning) {
+      dino.vy = dino.jumpPower;
+      dino.grounded = false;
+      playBeep(620, 'square', 0.08);
+    }
+  }
+
+  function updateDino(dt) {
+    // Jump physics
+    dino.vy += dino.gravity;
+    dino.y += dino.vy;
+    if (dino.y >= 130) {
+      dino.y = 130;
+      dino.vy = 0;
+      dino.grounded = true;
+    }
+
+    // Legs animation
+    dino.leg = (dino.leg + 0.2) % 2;
+
+    // Score & Speed
+    dinoScore += 0.2;
+    var curScoreInt = Math.floor(dinoScore);
+    document.getElementById('dino-cur-score').textContent = String(curScoreInt).padStart(5, '0');
+    if (curScoreInt > dinoHighScore) {
+      dinoHighScore = curScoreInt;
+      localStorage.setItem('dino_hi_score', dinoHighScore);
+      document.getElementById('dino-hi-score').textContent = String(dinoHighScore).padStart(5, '0');
+    }
+
+    // Milestone sound every 100 points
+    if (curScoreInt > 0 && curScoreInt % 100 === 0 && Math.floor(dinoScore - 0.2) % 100 !== 0) {
+      playBeep(880, 'square', 0.15);
+    }
+
+    gameSpeed = 3.5 + Math.min(3.5, curScoreInt / 250);
+
+    // Ground scroll
+    groundOffset = (groundOffset + gameSpeed) % 20;
+
+    // Clouds
+    clouds.forEach(function(c) {
+      c.x -= gameSpeed * 0.25;
+      if (c.x < -40) c.x = 420;
+    });
+
+    // Spawn Obstacles (Cactus or Pterodactyl)
+    spawnTimer += dt;
+    if (spawnTimer > (1400 / (gameSpeed / 3.5)) + Math.random() * 800) {
+      spawnTimer = 0;
+      var isBird = curScoreInt > 150 && Math.random() > 0.65;
+      if (isBird) {
+        obstacles.push({ x: 420, y: 105, w: 24, h: 16, type: 'bird', frame: 0 });
+      } else {
+        var isDouble = Math.random() > 0.6;
+        obstacles.push({ x: 420, y: 134, w: isDouble ? 22 : 14, h: 28, type: 'cactus' });
+      }
+    }
+
+    // Update Obstacles & Collision Check
+    for (var i = obstacles.length - 1; i >= 0; i--) {
+      var ob = obstacles[i];
+      ob.x -= gameSpeed;
+
+      // Hitbox check
+      var hitMargin = 4;
+      if (
+        dino.x + hitMargin < ob.x + ob.w - hitMargin &&
+        dino.x + dino.w - hitMargin > ob.x + hitMargin &&
+        dino.y + hitMargin < ob.y + ob.h - hitMargin &&
+        dino.y + dino.h - hitMargin > ob.y + hitMargin
+      ) {
+        handleDinoGameOver();
+        return;
+      }
+
+      if (ob.x < -30) obstacles.splice(i, 1);
+    }
+  }
+
+  function handleDinoGameOver() {
+    dinoGameRunning = false;
+    if (dinoGameLoopId) cancelAnimationFrame(dinoGameLoopId);
+    playBeep(180, 'sawtooth', 0.35);
+
+    // DEDUCT 1 TICKET IMMEDIATELY (Strict 1-play constraint)
+    var curTickets = getDinoTickets();
+    curTickets = Math.max(0, curTickets - 1);
+    localStorage.setItem('dino_game_tickets', curTickets);
+
+    var finalScore = Math.floor(dinoScore);
+    document.getElementById('dino-final-score').textContent = finalScore;
+    document.getElementById('dino-modal-tickets').textContent = curTickets;
+
+    var retryBtn = document.getElementById('btn-dino-retry');
+    var msgEl = document.getElementById('dino-over-msg');
+
+    if (curTickets > 0) {
+      retryBtn.classList.remove('hidden');
+      retryBtn.textContent = '🎮 남은 티켓(' + curTickets + '장)으로 계속하기';
+      msgEl.textContent = '아쉽게 부딪혔어! 하지만 아직 티켓이 남아있어!';
+    } else {
+      retryBtn.classList.add('hidden');
+      msgEl.textContent = '멋진 질주였어! 다음 퀘스트를 완료하고 부모님께 승인받으면 또 1판 달릴 수 있어! ⚡';
+    }
+
+    document.getElementById('dino-gameover-overlay').classList.remove('hidden');
+    updateDinoBanner();
+  }
+
+  function retryDinoGame() {
+    var tickets = getDinoTickets();
+    if (tickets <= 0) {
+      showToast("⚠️ 티켓이 모두 소진되었습니다!", 3000);
+      return;
+    }
+    startDinoGame();
+  }
+
+  function drawDinoScene(ctx) {
+    ctx.fillStyle = '#0B0F19';
+    ctx.fillRect(0, 0, 400, 180);
+
+    // Stars / Sparkles in night sky
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.fillRect(40, 20, 2, 2);
+    ctx.fillRect(120, 15, 2, 2);
+    ctx.fillRect(190, 35, 1.5, 1.5);
+    ctx.fillRect(280, 18, 2, 2);
+    ctx.fillRect(350, 40, 2, 2);
+
+    // Clouds
+    ctx.fillStyle = '#1E293B';
+    clouds.forEach(function(c) {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 10, 0, Math.PI * 2);
+      ctx.arc(c.x + 10, c.y - 4, 12, 0, Math.PI * 2);
+      ctx.arc(c.x + 22, c.y, 10, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Ground line
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 162);
+    ctx.lineTo(400, 162);
+    ctx.stroke();
+
+    // Ground dots
+    ctx.fillStyle = '#475569';
+    for (var x = -groundOffset; x < 400; x += 18) {
+      ctx.fillRect(x, 165, 3, 2);
+      if (x % 36 === 0) ctx.fillRect(x + 8, 168, 4, 2);
+    }
+
+    // Draw Obstacles
+    obstacles.forEach(function(ob) {
+      if (ob.type === 'cactus') {
+        ctx.fillStyle = '#10B981'; // Cyber emerald cactus
+        ctx.fillRect(ob.x + 4, ob.y, ob.w - 8, ob.h);
+        // Arms
+        ctx.fillRect(ob.x, ob.y + 6, 4, 10);
+        ctx.fillRect(ob.x + ob.w - 4, ob.y + 10, 4, 10);
+      } else {
+        // Pterodactyl (Bird)
+        ctx.fillStyle = '#F59E0B'; // Gold bird
+        ctx.fillRect(ob.x, ob.y, ob.w, ob.h - 6);
+        ctx.fillRect(ob.x + 6, ob.y - 4, 8, 4); // wing
+      }
+    });
+
+    // Draw T-Rex (Retro Pixel Dino)
+    ctx.fillStyle = '#A78BFA'; // Cyber neon purple T-Rex!
+    var dx = dino.x, dy = dino.y;
+    // Head & Snout
+    ctx.fillRect(dx + 12, dy, 14, 12);
+    ctx.fillRect(dx + 18, dy + 2, 8, 8);
+    // Eye (cutout)
+    ctx.fillStyle = '#0B0F19';
+    ctx.fillRect(dx + 15, dy + 2, 3, 3);
+    // Body
+    ctx.fillStyle = '#A78BFA';
+    ctx.fillRect(dx + 6, dy + 10, 14, 14);
+    // Tiny arm
+    ctx.fillRect(dx + 18, dy + 14, 4, 2);
+    // Tail
+    ctx.fillRect(dx, dy + 12, 6, 6);
+    ctx.fillRect(dx + 2, dy + 8, 4, 4);
+    // Legs
+    if (dino.grounded) {
+      if (Math.floor(dino.leg) === 0) {
+        ctx.fillRect(dx + 8, dy + 24, 3, 8);
+        ctx.fillRect(dx + 15, dy + 24, 3, 5);
+      } else {
+        ctx.fillRect(dx + 8, dy + 24, 3, 5);
+        ctx.fillRect(dx + 15, dy + 24, 3, 8);
+      }
+    } else {
+      // Jumping legs tucked
+      ctx.fillRect(dx + 8, dy + 24, 3, 5);
+      ctx.fillRect(dx + 14, dy + 24, 3, 5);
+    }
+  }
+
+  // Setup Event Listeners for Dino Game
+  window.addEventListener('load', function() {
+    updateDinoBanner();
+
+    var jumpBtn = document.getElementById('btn-dino-jump');
+    if (jumpBtn) {
+      jumpBtn.addEventListener('mousedown', function(e) { e.preventDefault(); triggerDinoJump(); });
+      jumpBtn.addEventListener('touchstart', function(e) { e.preventDefault(); triggerDinoJump(); }, { passive: false });
+    }
+
+    var canvas = document.getElementById('dinoCanvas');
+    if (canvas) {
+      canvas.addEventListener('mousedown', function(e) { e.preventDefault(); triggerDinoJump(); });
+      canvas.addEventListener('touchstart', function(e) { e.preventDefault(); triggerDinoJump(); }, { passive: false });
+    }
+
+    window.addEventListener('keydown', function(e) {
+      var modal = document.getElementById('dino-game-modal');
+      if (modal && !modal.classList.contains('hidden')) {
+        if (e.code === 'Space' || e.code === 'ArrowUp') {
+          e.preventDefault();
+          triggerDinoJump();
+        }
+      }
+    });
+  });
+
+  </script>
   <style>
     * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
     body {
@@ -71,6 +877,316 @@
     /* Hide scrollbar */
     ::-webkit-scrollbar { display: none; }
     * { -ms-overflow-style: none; scrollbar-width: none; }
+  
+    /* ================================================================= */
+    /* 🎮 CYBER ARCADE & RETRO NEON MASTER THEME ENGINE                  */
+    /* ================================================================= */
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800;900&display=swap');
+
+    html, body {
+      background-color: #0B0F19 !important;
+      color: #F8FAFC !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Pretendard", sans-serif !important;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
+    /* Glass Top Header */
+    .glass-top {
+      background: rgba(15, 23, 42, 0.95) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+      padding-top: env(safe-area-inset-top) !important;
+    }
+
+    /* Cards */
+    .card {
+      background: #13192B !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      color: #F8FAFC !important;
+    }
+
+    /* Bottom Nav Bar */
+    .glass-nav {
+      background: rgba(15, 23, 42, 0.95) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+      padding-bottom: env(safe-area-inset-bottom) !important;
+    }
+    .tab-item {
+      color: #8C9BB0 !important;
+    }
+    .tab-item.active {
+      color: #A78BFA !important;
+    }
+    .tab-item.active .tab-label {
+      color: #C4B5FD !important;
+      font-weight: 800 !important;
+    }
+
+    /* Badges & Accents */
+    .badge-pending  { background: rgba(245, 158, 11, 0.15) !important; color: #FBBF24 !important; border: 1px solid rgba(245, 158, 11, 0.3) !important; }
+    .badge-approved { background: rgba(16, 185, 129, 0.15) !important; color: #34D399 !important; border: 1px solid rgba(16, 185, 129, 0.3) !important; }
+    .badge-rejected { background: rgba(239, 68, 68, 0.15) !important; color: #F87171 !important; border: 1px solid rgba(239, 68, 68, 0.3) !important; }
+
+    /* Modals */
+    .modal-bg {
+      background: rgba(0, 0, 0, 0.85) !important;
+      backdrop-filter: blur(10px) !important;
+    }
+    .modal-sheet, .modal-center {
+      background: #13192B !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      color: #FFFFFF !important;
+    }
+    input, textarea, select {
+      background-color: #0B0F19 !important;
+      border-color: rgba(255, 255, 255, 0.15) !important;
+      color: #FFFFFF !important;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: #8B5CF6 !important;
+      outline: none !important;
+    }
+
+  
+    /* ================================================================= */
+    /* 🌟 HIGH-CONTRAST VISIBILITY OVERRIDES (완전 시인성 확보)           */
+    /* ================================================================= */
+    
+    /* All Cards Headings & Titles: Pure Brilliant White */
+    .card h2, .card h3, .card h4, 
+    .sheet h2, .sheet h3, .sheet h4,
+    .modal-sheet h2, .modal-sheet h3, .modal-sheet h4,
+    .modal-center h2, .modal-center h3, .modal-center h4 {
+      color: #FFFFFF !important;
+      font-weight: 800 !important;
+    }
+
+    /* Force all dark text utility classes to bright high contrast in dark mode */
+    .text-slate-900, .text-slate-800, .text-gray-900, .text-gray-800 {
+      color: #FFFFFF !important;
+    }
+    .text-slate-700, .text-gray-700 {
+      color: #E2E8F0 !important;
+    }
+    .text-slate-500, .text-gray-500 {
+      color: #94A3B8 !important;
+    }
+    .text-slate-600, .text-gray-600 {
+      color: #CBD5E1 !important;
+    }
+
+    /* Card Item Titles */
+    .card .font-extrabold, .card .font-black, .card .font-bold {
+      color: #FFFFFF;
+    }
+    .card p.text-slate-400, .card p.text-xs {
+      color: #94A3B8 !important;
+    }
+
+    /* Bottom Navigation Bar Glass Bot - Dark Cyber Aesthetic */
+    .glass-bot {
+      background: rgba(15, 23, 42, 0.96) !important;
+      backdrop-filter: blur(20px) !important;
+      -webkit-backdrop-filter: blur(20px) !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5) !important;
+    }
+    .glass-bot .tab-item {
+      color: #8C9BB0 !important;
+    }
+    .glass-bot .tab-item.active {
+      color: #FBBF24 !important;
+    }
+    .glass-bot .tab-item.active .tab-label {
+      color: #FBBF24 !important;
+      font-weight: 900 !important;
+    }
+
+    /* Modal Sheets (.sheet, .sheet-center) Dark Background */
+    .sheet, .sheet-center {
+      background: #13192B !important;
+      color: #FFFFFF !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.8) !important;
+    }
+    .grabber {
+      background: #475569 !important;
+    }
+
+    /* Input Fields & Textareas */
+    input, textarea, select {
+      background-color: #0B0F19 !important;
+      border: 1px solid rgba(255, 255, 255, 0.15) !important;
+      color: #FFFFFF !important;
+    }
+    input::placeholder, textarea::placeholder {
+      color: #64748B !important;
+    }
+
+    /* Quest Filter Buttons */
+    .filter-btn {
+      background: #182238 !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      color: #94A3B8 !important;
+    }
+    .filter-btn.active {
+      background: #8B5CF6 !important;
+      color: #FFFFFF !important;
+      border-color: #A78BFA !important;
+      font-weight: 800 !important;
+    }
+
+  
+    /* ================================================================= */
+    /* 🌟 HIGH-CONTRAST RIGHT-SIDE BADGES & BUTTONS (우측 시인성 극대화) */
+    /* ================================================================= */
+
+    /* 1. Quest Right Side Point Badge */
+    .quest-point-badge {
+      background: rgba(245, 158, 11, 0.15) !important;
+      border: 1.5px solid #F59E0B !important;
+      color: #FBBF24 !important;
+      font-size: 13px !important;
+      font-weight: 900 !important;
+      padding: 5px 12px !important;
+      border-radius: 12px !important;
+      display: inline-block !important;
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.25) !important;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+      white-space: nowrap !important;
+    }
+
+    /* 2. Shop Right Side Buy Button */
+    .shop-btn-can-buy {
+      background: linear-gradient(135deg, #F59E0B, #D97706) !important;
+      border: 1.5px solid #FCD34D !important;
+      color: #FFFFFF !important;
+      font-size: 12px !important;
+      font-weight: 900 !important;
+      padding: 7px 13px !important;
+      border-radius: 12px !important;
+      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4) !important;
+      cursor: pointer !important;
+      white-space: nowrap !important;
+    }
+    .shop-btn-disabled {
+      background: #1E293B !important;
+      border: 1.5px solid #475569 !important;
+      color: #CBD5E1 !important;
+      font-size: 12px !important;
+      font-weight: 800 !important;
+      padding: 7px 13px !important;
+      border-radius: 12px !important;
+      cursor: not-allowed !important;
+      white-space: nowrap !important;
+    }
+
+    /* 3. Header Counter Badges (내 인벤토리 '2개', 활동기록 '8건') */
+    .cyber-header-badge {
+      background: #1E293B !important;
+      border: 1.5px solid #8B5CF6 !important;
+      color: #C084FC !important;
+      font-size: 11.5px !important;
+      font-weight: 900 !important;
+      padding: 3px 10px !important;
+      border-radius: 9999px !important;
+      box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3) !important;
+    }
+
+    /* 4. Inventory Right Side Badges & Buttons */
+    .badge-active {
+      background: rgba(16, 185, 129, 0.2) !important;
+      border: 1.5px solid #10B981 !important;
+      color: #34D399 !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      padding: 3px 9px !important;
+      border-radius: 9999px !important;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.25) !important;
+    }
+    .badge-used {
+      background: #1E293B !important;
+      border: 1.5px solid #334155 !important;
+      color: #64748B !important;
+      font-size: 11px !important;
+      font-weight: 800 !important;
+      padding: 3px 9px !important;
+      border-radius: 9999px !important;
+    }
+    .inv-use-btn {
+      background: linear-gradient(135deg, #E11D48, #BE123C) !important;
+      border: 1.5px solid #FB7185 !important;
+      color: #FFFFFF !important;
+      font-size: 11px !important;
+      font-weight: 900 !important;
+      padding: 4px 10px !important;
+      border-radius: 8px !important;
+      cursor: pointer !important;
+      box-shadow: 0 2px 8px rgba(225, 29, 72, 0.4) !important;
+    }
+
+    /* 5. Status Badges in History & Approval */
+    .badge-approved {
+      background: rgba(16, 185, 129, 0.2) !important;
+      border: 1.5px solid #10B981 !important;
+      color: #34D399 !important;
+      font-weight: 900 !important;
+    }
+    .badge-pending {
+      background: rgba(245, 158, 11, 0.2) !important;
+      border: 1.5px solid #F59E0B !important;
+      color: #FBBF24 !important;
+      font-weight: 900 !important;
+    }
+    .badge-rejected {
+      background: rgba(239, 68, 68, 0.2) !important;
+      border: 1.5px solid #EF4444 !important;
+      color: #F87171 !important;
+      font-weight: 900 !important;
+    }
+
+    /* 6. Comment & Praise Boxes in History */
+    .cyber-memo-box {
+      background: #131E32 !important;
+      border: 1px solid rgba(99, 102, 241, 0.4) !important;
+      color: #CBD5E1 !important;
+      border-radius: 12px !important;
+      padding: 10px 12px !important;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+    }
+    .cyber-praise-box {
+      background: rgba(245, 158, 11, 0.15) !important;
+      border: 1.5px solid rgba(245, 158, 11, 0.5) !important;
+      color: #FDE68A !important;
+      border-radius: 12px !important;
+      padding: 10px 12px !important;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+      box-shadow: 0 2px 10px rgba(245, 158, 11, 0.15) !important;
+    }
+    .cyber-reject-box {
+      background: rgba(244, 63, 94, 0.15) !important;
+      border: 1.5px solid rgba(244, 63, 94, 0.5) !important;
+      color: #FECDD3 !important;
+      border-radius: 12px !important;
+      padding: 10px 12px !important;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+    }
+
+    /* 7. Catch-all: Kill any leftover white backgrounds inside cards */
+    .card .bg-white, .card .bg-slate-50, .card .bg-slate-100,
+    .card .bg-indigo-50, .card .bg-amber-50, .card .bg-rose-50 {
+      background: #1A2234 !important;
+      color: #E2E8F0 !important;
+      border-color: rgba(255, 255, 255, 0.12) !important;
+    }
+
   </style>
 </head>
 <body class="min-h-screen antialiased">
@@ -82,13 +1198,24 @@
     <div class="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <span class="text-xl">🏰</span>
-        <span class="font-black text-sm tracking-tight text-slate-900">우리 가족 용돈 퀘스트</span>
+        <div>
+          <div class="font-black text-sm tracking-tight text-white flex items-center gap-1.5">
+            <span>용돈 퀘스트</span>
+            <span class="bg-violet-600/30 border border-violet-400/40 text-violet-300 text-[10px] font-extrabold px-1.5 py-0.2 rounded">ARCADE</span>
+          </div>
+        </div>
       </div>
-      <button type="button" onclick="openProfileModal()" class="tap flex items-center gap-1.5 bg-white/90 border border-slate-200 px-3 py-1.5 rounded-full text-xs font-bold text-slate-700 shadow-sm">
-        <span id="hdr-avatar">🧒</span>
-        <span id="hdr-name">우리 아이</span>
-        <span class="text-slate-400 text-[9px]">▼</span>
-      </button>
+      <div class="flex items-center gap-2">
+        <button type="button" id="hdr-game-btn" onclick="openDinoGameModal()" class="tap hidden flex items-center gap-1 bg-amber-400/20 border border-amber-400/40 px-2.5 py-1.5 rounded-full text-xs font-black text-amber-300 shadow-sm animate-pulse">
+          <span>🦖</span>
+          <span id="hdr-ticket-text">게임 1판</span>
+        </button>
+        <button type="button" onclick="openProfileModal()" class="tap flex items-center gap-1.5 bg-[#182238] border border-slate-700 px-3 py-1.5 rounded-full text-xs font-bold text-slate-200 shadow-sm">
+          <span id="hdr-avatar">🧒</span>
+          <span id="hdr-name">우리 아이</span>
+          <span class="text-slate-400 text-[9px]">▼</span>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -99,6 +1226,12 @@
 
     <!-- ── TAB: 퀘스트 ────────────────── -->
     <div id="view-quests" class="tab-view space-y-4 py-4">
+
+      <!-- 🦖 CHROME DINO ARCADE GAME TICKET BANNER -->
+      <div id="dino-ticket-banner" class="mb-3">
+        <!-- Will be rendered dynamically by updateDinoBanner() -->
+      </div>
+
 
       <!-- Hero Card -->
       <div class="card p-5 bg-gradient-to-br from-indigo-800 via-indigo-900 to-slate-900 text-white relative overflow-hidden shadow-xl">
@@ -172,10 +1305,10 @@
     <div id="view-inv" class="tab-view hidden space-y-4 py-4">
       <div class="card p-4 flex items-center justify-between">
         <div>
-          <h2 class="text-sm font-black text-slate-900">🎒 내 인벤토리</h2>
+          <h2 class="text-sm font-black text-white">🎒 내 인벤토리</h2>
           <p class="text-xs text-slate-500 mt-0.5">획득한 보상과 쿠폰을 관리해요</p>
         </div>
-        <span id="inv-badge" class="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full">0개</span>
+        <span id="inv-badge" class="cyber-header-badge">0개</span>
       </div>
       <div id="inv-list" class="space-y-2.5"></div>
     </div>
@@ -184,24 +1317,24 @@
     <div id="view-history" class="tab-view hidden space-y-4 py-4">
       <div class="card p-4 flex items-center justify-between">
         <div>
-          <h2 class="text-sm font-black text-slate-900">📜 퀘스트 수행 & 심의 기록</h2>
+          <h2 class="text-sm font-black text-white">📜 퀘스트 수행 & 심의 기록</h2>
           <p class="text-xs text-slate-500 mt-0.5">인증 사진과 부모님 코멘트 기록</p>
         </div>
-        <span id="history-badge" class="bg-indigo-50 text-indigo-700 text-xs font-bold px-2.5 py-1 rounded-full">0건</span>
+        <span id="history-badge" class="cyber-header-badge">0건</span>
       </div>
       <div id="history-list" class="space-y-3"></div>
       <!-- Pagination -->
       <div id="history-pagination" class="flex items-center justify-between pb-4 px-1 hidden">
-        <button type="button" id="hist-prev" onclick="changeHistPage(-1)" class="tap px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold shadow-sm">◀ 이전</button>
+        <button type="button" id="hist-prev" onclick="changeHistPage(-1)" class="tap px-3.5 py-2 bg-slate-800 border border-slate-700 text-slate-200 rounded-xl text-xs font-bold shadow-sm">◀ 이전</button>
         <span id="hist-page-info" class="text-xs font-bold text-slate-600">1 / 1</span>
-        <button type="button" id="hist-next" onclick="changeHistPage(1)" class="tap px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl text-xs font-bold shadow-sm">다음 ▶</button>
+        <button type="button" id="hist-next" onclick="changeHistPage(1)" class="tap px-3.5 py-2 bg-slate-800 border border-slate-700 text-slate-200 rounded-xl text-xs font-bold shadow-sm">다음 ▶</button>
       </div>
     </div>
 
     <!-- ── TAB: 승인 (부모) ───────────── -->
     <div id="view-approve" class="tab-view hidden space-y-4 py-4">
       <div class="card p-5 border-l-4 border-amber-500">
-        <h2 class="text-sm font-black text-slate-900 flex items-center gap-2"><span class="text-xl">⚖️</span>부모님 심의 & 칭찬 센터</h2>
+        <h2 class="text-sm font-black text-white flex items-center gap-2"><span class="text-xl">⚖️</span>부모님 심의 & 칭찬 센터</h2>
         <p class="text-xs text-slate-500 mt-1 leading-relaxed">아이가 완료 제출한 퀘스트를 검토하고, 따뜻한 칭찬 한마디와 함께 포인트를 승인해 주세요!</p>
       </div>
       <div id="approve-list" class="space-y-3"></div>
@@ -249,7 +1382,7 @@
         <div class="flex items-start justify-between">
           <div class="flex-1 min-w-0 pr-3">
             <span id="qm-cat" class="text-[10px] font-bold bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md">일일</span>
-            <h3 id="qm-title" class="text-lg font-black text-slate-900 mt-1">퀘스트 제목</h3>
+            <h3 id="qm-title" class="text-lg font-black text-white mt-1">퀘스트 제목</h3>
             <p id="qm-desc" class="text-xs text-slate-500 mt-0.5 leading-relaxed"></p>
           </div>
           <span id="qm-pts" class="text-base font-black text-indigo-600 flex-shrink-0">+300 P</span>
@@ -258,7 +1391,7 @@
         <!-- Photo Upload (2~3장) -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <label class="text-xs font-bold text-slate-700">📸 인증 사진 첨부 <span class="text-red-500">*</span></label>
+            <label class="text-xs font-bold text-slate-200">📸 인증 사진 첨부 <span class="text-red-500">*</span></label>
             <span id="photo-count" class="text-[11px] font-semibold text-slate-400">0 / 3장</span>
           </div>
           <p class="text-[11px] text-slate-400 leading-relaxed -mt-1">최소 2장, 최대 3장 업로드해주세요.</p>
@@ -271,7 +1404,7 @@
 
         <!-- Memo -->
         <div class="space-y-1.5">
-          <label class="text-xs font-bold text-slate-700">💬 소감 (선택)</label>
+          <label class="text-xs font-bold text-slate-200">💬 소감 (선택)</label>
           <textarea id="qm-memo" rows="2" placeholder="퀘스트를 완료하고 느낀 점을 적어봐요!" class="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50 resize-none"></textarea>
         </div>
 
@@ -292,7 +1425,7 @@
   <div id="pin-modal" class="modal-bg center hidden" onclick="if(event.target===this)closePinModal()">
     <div class="sheet-center p-6 space-y-4 text-center">
       <div class="text-4xl">🔐</div>
-      <h3 class="text-base font-black text-slate-900">부모님 인증 PIN</h3>
+      <h3 class="text-base font-black text-white">부모님 인증 PIN</h3>
       <p class="text-xs text-slate-500">부모님 전용 모드입니다. PIN 번호 4자리를 입력해 주세요.</p>
       <div id="pin-name-row" class="flex gap-2 justify-center">
         <button type="button" onclick="setPinTarget('mom')" id="pin-btn-mom" class="tap flex-1 py-2 rounded-xl border-2 border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold">👩 엄마</button>
@@ -314,7 +1447,7 @@
     <div id="profile-sheet" class="sheet">
       <div class="grabber"></div>
       <div class="px-6 pb-6 space-y-3">
-        <h3 class="text-sm font-black text-slate-900 mb-1">사용자 프로필 선택</h3>
+        <h3 class="text-sm font-black text-white mb-1">사용자 프로필 선택</h3>
         <div id="profile-list" class="space-y-2"></div>
         <button type="button" onclick="openApiConfigModal()" class="tap w-full p-3 rounded-2xl border border-dashed border-slate-300 flex items-center justify-between text-slate-600 hover:bg-slate-50 text-xs font-bold mt-1">
           <span class="flex items-center gap-1.5"><span>⚙️</span><span>Apps Script API 주소 연동</span></span>
@@ -332,7 +1465,7 @@
     <div class="sheet-center p-6 space-y-4 text-left">
       <div class="flex items-center gap-2">
         <span class="text-2xl">⚙️</span>
-        <h3 class="text-base font-black text-slate-900">Apps Script API 주소</h3>
+        <h3 class="text-base font-black text-white">Apps Script API 주소</h3>
       </div>
       <p class="text-xs text-slate-500 leading-relaxed">GitHub Pages 등 외부에서 구글 스프레드시트와 연동할 Apps Script 웹앱 배포 URL을 입력하세요.</p>
       <input type="text" id="api-url-input" placeholder="https://script.google.com/macros/s/.../exec" class="w-full text-xs p-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50 font-mono">
@@ -462,7 +1595,7 @@
     renderShop();
     renderInventory();
     renderHistory();
-    renderApprove();
+    renderApprove(); updateDinoBanner();
     renderProfileList();
     updatePendingDot();
   }
@@ -533,22 +1666,22 @@
 
     container.innerHTML = filtered.map(function(q) {
       var cat = normCat(q.category || q.period || "일일");
-      var catColor = cat === "주간" ? "bg-violet-100 text-violet-700"
-                   : cat === "특별" ? "bg-rose-100 text-rose-700"
-                   : "bg-blue-100 text-blue-700";
+      var catColor = cat === "주간" ? "bg-violet-500/20 text-violet-300 border border-violet-500/50"
+                   : cat === "특별" ? "bg-rose-500/20 text-rose-300 border border-rose-500/50"
+                   : "bg-blue-500/20 text-blue-300 border border-blue-500/50";
       return '<div onclick="openQuestModal(\'' + esc(q.id) + '\')" class="tap card p-4 flex items-center justify-between hover:border-indigo-200 transition-colors">' +
         '<div class="flex items-center gap-3 min-w-0">' +
           '<span class="text-2xl flex-shrink-0">' + (q.icon || "⭐") + '</span>' +
           '<div class="min-w-0">' +
             '<div class="flex items-center gap-1.5 flex-wrap">' +
-              '<h4 class="font-extrabold text-sm text-slate-900">' + esc(q.title) + '</h4>' +
+              '<h4 class="font-extrabold text-sm text-white">' + esc(q.title) + '</h4>' +
               '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded ' + catColor + '">' + cat + '</span>' +
             '</div>' +
             (q.desc ? '<p class="text-xs text-slate-400 mt-0.5 truncate">' + esc(q.desc) + '</p>' : '') +
           '</div>' +
         '</div>' +
         '<div class="flex-shrink-0 ml-2">' +
-          '<span class="text-xs font-black text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">+' + num(q.points || 0) + ' P</span>' +
+          '<span class="quest-point-badge">+' + num(q.points || 0) + ' P</span>' +
         '</div>' +
       '</div>';
     }).join("");
@@ -570,12 +1703,12 @@
       return '<div class="card p-4 flex items-center gap-3">' +
         '<span class="text-3xl flex-shrink-0">' + (item.icon || "🎁") + '</span>' +
         '<div class="flex-1 min-w-0">' +
-          '<h4 class="font-extrabold text-sm text-slate-900">' + esc(item.title) + '</h4>' +
+          '<h4 class="font-extrabold text-sm text-white">' + esc(item.title) + '</h4>' +
           (item.desc ? '<p class="text-xs text-slate-400 mt-0.5">' + esc(item.desc) + '</p>' : '') +
         '</div>' +
         '<button type="button" onclick="redeemAction(\'' + esc(item.id) + '\',\'' + esc(item.title) + '\',' + item.cost + ',\'' + esc(item.icon||'🎁') + '\')" ' +
           'class="tap flex-shrink-0 px-3 py-2 rounded-xl text-xs font-extrabold shadow-sm ' +
-          (canBuy ? 'bg-amber-500 text-white shadow-amber-500/30' : 'bg-slate-100 text-slate-400') + '">' +
+          (canBuy ? 'shop-btn-can-buy' : 'shop-btn-disabled') + '">' +
           num(item.cost) + ' P 교환' +
         '</button>' +
       '</div>';
@@ -602,12 +1735,12 @@
       return '<div class="card p-4 flex items-center gap-3 ' + (used ? "opacity-60" : "") + '">' +
         '<span class="text-3xl flex-shrink-0">' + (item.icon || "🎁") + '</span>' +
         '<div class="flex-1 min-w-0">' +
-          '<h4 class="font-extrabold text-sm text-slate-900">' + esc(item.rewardTitle) + '</h4>' +
+          '<h4 class="font-extrabold text-sm text-white">' + esc(item.rewardTitle) + '</h4>' +
           '<p class="text-xs text-slate-400 mt-0.5">획득: ' + (item.acquiredAt || "") + '</p>' +
         '</div>' +
         '<div class="flex flex-col items-end gap-1.5">' +
           '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + badgeCls + '">' + badgeTxt + '</span>' +
-          (!used ? '<button type="button" onclick="useItemAction(\'' + item.id + '\',\'' + esc(item.rewardTitle) + '\')" class="tap text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg">사용하기</button>' : '') +
+          (!used ? '<button type="button" onclick="useItemAction(\'' + item.id + '\',\'' + esc(item.rewardTitle) + '\')" class="tap inv-use-btn">사용하기</button>' : '') +
         '</div>' +
       '</div>';
     }).join("");
@@ -662,16 +1795,16 @@
 
       return '<div class="card p-4 space-y-2.5">' +
         '<div class="flex items-center justify-between">' +
-          '<h4 class="font-extrabold text-sm text-slate-900 flex-1 pr-2">' + esc(title) + '</h4>' +
+          '<h4 class="font-extrabold text-sm text-white flex-1 pr-2">' + esc(title) + '</h4>' +
           '<div class="flex items-center gap-2 flex-shrink-0">' +
             '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + badgeCls + '">' + badgeTxt + '</span>' +
             '<span class="text-xs font-black text-emerald-600">+' + num(points) + ' P</span>' +
           '</div>' +
         '</div>' +
         (log.date ? '<p class="text-[11px] text-slate-400 font-medium">📅 ' + log.date + '</p>' : '') +
-        (log.memo ? '<div class="bg-indigo-50 rounded-xl p-2.5 text-xs text-indigo-900"><strong>💬 소감:</strong> ' + esc(log.memo) + '</div>' : '') +
+        (log.memo ? '<div class="cyber-memo-box"><strong>💬 소감:</strong> ' + esc(log.memo) + '</div>' : '') +
         photosHtml +
-        (log.parentComment ? (isRejected ? '<div class="bg-rose-50 rounded-xl p-2.5 text-xs text-rose-900 border border-rose-200/60"><strong>❌ ' + esc(log.approvedBy || "부모님") + '의 반려 사유:</strong> ' + esc(log.parentComment) + '</div>' : '<div class="bg-amber-50 rounded-xl p-2.5 text-xs text-amber-900 border border-amber-200/60"><strong>👑 ' + esc(log.approvedBy || "부모님") + '의 칭찬:</strong> ' + esc(log.parentComment) + '</div>') : '') +
+        (log.parentComment ? (isRejected ? '<div class="cyber-reject-box"><strong>❌ ' + esc(log.approvedBy || "부모님") + '의 반려 사유:</strong> ' + esc(log.parentComment) + '</div>' : '<div class="cyber-praise-box"><strong>👑 ' + esc(log.approvedBy || "부모님") + '의 칭찬:</strong> ' + esc(log.parentComment) + '</div>') : '') +
       '</div>';
     }).join("");
 
@@ -682,8 +1815,8 @@
       document.getElementById("hist-page-info").textContent = histPage + " / " + totalPages;
       document.getElementById("hist-prev").disabled = (histPage === 1);
       document.getElementById("hist-next").disabled = (histPage === totalPages);
-      document.getElementById("hist-prev").className = "tap px-3.5 py-2 rounded-xl text-xs font-bold " + (histPage === 1 ? "bg-slate-100 text-slate-400 opacity-50" : "bg-white border border-slate-200 text-slate-700 shadow-sm");
-      document.getElementById("hist-next").className = "tap px-3.5 py-2 rounded-xl text-xs font-bold " + (histPage >= totalPages ? "bg-slate-100 text-slate-400 opacity-50" : "bg-white border border-slate-200 text-slate-700 shadow-sm");
+      document.getElementById("hist-prev").className = "tap px-3.5 py-2 rounded-xl text-xs font-bold " + (histPage === 1 ? "bg-slate-100 text-slate-400 opacity-50" : "bg-slate-800 border border-slate-700 text-slate-200 shadow-sm");
+      document.getElementById("hist-next").className = "tap px-3.5 py-2 rounded-xl text-xs font-bold " + (histPage >= totalPages ? "bg-slate-100 text-slate-400 opacity-50" : "bg-slate-800 border border-slate-700 text-slate-200 shadow-sm");
     } else {
       pag.classList.add("hidden");
     }
@@ -738,7 +1871,7 @@
           '<span class="text-xs font-black text-indigo-600">+' + num(points) + ' P</span>' +
         '</div>' +
         '<div>' +
-          '<h4 class="text-sm font-extrabold text-slate-900">' + esc(title) + '</h4>' +
+          '<h4 class="text-sm font-extrabold text-white">' + esc(title) + '</h4>' +
           (log.date ? '<p class="text-[11px] text-slate-400 mt-0.5">📅 ' + log.date + '</p>' : '') +
         '</div>' +
         (log.memo ? '<div class="bg-slate-50 rounded-xl p-2.5 text-xs text-slate-700 border border-slate-100"><strong>💬 아이 소감:</strong> ' + esc(log.memo) + '</div>' : '') +
@@ -890,8 +2023,13 @@
       comment: comment, approvedBy: currentUser.name
     }, function(res) {
       if (res && res.success) {
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-        showToast(res.message || "✅ 승인 완료!", 3000);
+        // 🦖 Award 1 Dino Game Ticket upon parent approval!
+        var curTickets = parseInt(localStorage.getItem('dino_game_tickets') || '0') + 1;
+        localStorage.setItem('dino_game_tickets', curTickets);
+        updateDinoBanner();
+
+        confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+        showToast("✅ 승인 완료! (+ " + num(points) + " P) 🎮 공룡 게임 티켓 1장 획득!", 4000);
         if (res.appData) { appData = res.appData; renderAll(); }
       } else {
         showToast("⚠️ " + (res && res.error ? res.error : "오류"), 3000);
@@ -1044,7 +2182,7 @@
         '<div class="flex items-center gap-3">' +
           '<span class="text-2xl">' + (p.icon || "🧒") + '</span>' +
           '<div class="text-left">' +
-            '<p class="text-sm font-extrabold text-slate-900">' + esc(p.name) + '</p>' +
+            '<p class="text-sm font-extrabold text-white">' + esc(p.name) + '</p>' +
             '<p class="text-[11px] text-slate-400">' + (isParent ? "부모 모드 (심의 & 승인)" : "아이 모드 (퀘스트 수행)") + '</p>' +
           '</div>' +
         '</div>' +
@@ -1135,7 +2273,7 @@
   function getDevFallback() {
     return {
       profiles: [
-        { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  icon: "🧒", points: 0, totalExp: 0 },
+        { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  icon: "🧒", points: 7400, totalExp: 7400 },
         { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", icon: "👩", pin: "1121" },
         { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", icon: "👨", pin: "7590" }
       ],
@@ -1143,7 +2281,7 @@
       child: {
         id: "child_1", name: "상급종합빡빡이(용사)", icon: "🧒",
         level: 3, title: "⭐ 든든한 퀘스트 챔피언",
-        totalExp: 0, currentBalance: 0,
+        totalExp: 7400, currentBalance: 7400,
         targetItem: "🎮 플레이스테이션", targetPoints: 100000,
         progressPct: 8, lvProgress: 2400, nextLvXp: 2500
       },
@@ -1203,6 +2341,471 @@
     closeApiConfigModal();
     setTimeout(function() { loadData(); }, 300);
   }
+  
+  // =================================================================
+  // 🦖 CHROME DINO RUNNER ARCADE GAME ENGINE (1-GAME STRICT LIMIT)
+  // =================================================================
+  var dinoGameRunning = false;
+  var dinoGameLoopId = null;
+  var dinoScore = 0;
+  var dinoHighScore = parseInt(localStorage.getItem('dino_hi_score') || '0');
+  var dinoAudioCtx = null;
+
+  // Sound generator via Web Audio API (100% Native & Offline)
+  function playBeep(freq, type, duration) {
+    try {
+      if (!dinoAudioCtx) dinoAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (dinoAudioCtx.state === 'suspended') dinoAudioCtx.resume();
+      var osc = dinoAudioCtx.createOscillator();
+      var gain = dinoAudioCtx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, dinoAudioCtx.currentTime);
+      gain.gain.setValueAtTime(0.1, dinoAudioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, dinoAudioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(dinoAudioCtx.destination);
+      osc.start();
+      osc.stop(dinoAudioCtx.currentTime + duration);
+    } catch(e) {}
+  }
+
+  function getDinoTickets() {
+    return parseInt(localStorage.getItem('dino_game_tickets') || '0');
+  }
+
+  function updateDinoBanner() {
+    var tickets = getDinoTickets();
+    var bannerEl = document.getElementById('dino-ticket-banner');
+    var hdrBtn = document.getElementById('hdr-game-btn');
+    var hdrText = document.getElementById('hdr-ticket-text');
+
+    if (hdrBtn) {
+      if (tickets > 0) {
+        hdrBtn.classList.remove('hidden');
+        if (hdrText) hdrText.textContent = '게임 ' + tickets + '판';
+      } else {
+        hdrBtn.classList.add('hidden');
+      }
+    }
+
+    if (!bannerEl) return;
+
+    if (tickets > 0) {
+      bannerEl.innerHTML = '<div class="card p-4 bg-gradient-to-r from-violet-950 via-purple-900 to-slate-900 border-2 border-amber-400 text-white rounded-2xl shadow-xl flex items-center justify-between relative overflow-hidden">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="w-12 h-12 bg-amber-400/20 border border-amber-400/40 rounded-xl flex items-center justify-center text-2xl animate-bounce">🦖</div>' +
+          '<div>' +
+            '<div class="flex items-center gap-1.5">' +
+              '<span class="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-md">보너스 획득!</span>' +
+              '<span class="text-xs font-black text-amber-300">티켓 <b class="text-sm">' + tickets + '</b>장 보유</span>' +
+            '</div>' +
+            '<div class="text-sm font-black text-white mt-0.5">공룡 점프 게임 (딱 1판!)</div>' +
+          '</div>' +
+        '</div>' +
+        '<button type="button" onclick="openDinoGameModal()" class="tap px-4 py-2 bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 rounded-xl text-xs font-black shadow-md shadow-amber-400/30 flex items-center gap-1 hover:brightness-110">' +
+          '<span>🎮 지금 시작</span>' +
+        '</button>' +
+      '</div>';
+    } else {
+      bannerEl.innerHTML = '<div class="card p-3.5 bg-slate-900/70 border border-slate-800 text-slate-400 rounded-2xl flex items-center justify-between">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="w-10 h-10 bg-slate-800 rounded-xl flex items-center justify-center text-xl opacity-60">🦖</div>' +
+          '<div>' +
+            '<div class="text-xs font-bold text-slate-300">공룡 달리기 미니게임 (남은 티켓: 0장)</div>' +
+            '<div class="text-[11px] text-slate-500">퀘스트를 완료하고 부모님께 승인받으면 1판 획득!</div>' +
+          '</div>' +
+        '</div>' +
+        '<button type="button" onclick="showToast(\'💡 퀘스트를 완료하고 부모님께 승인을 받으면 게임 티켓이 1장 지급돼요!\', 3000)" class="tap px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-400 rounded-xl text-xs font-bold">' +
+          '🔒 잠김' +
+        '</button>' +
+      '</div>';
+    }
+  }
+
+  function openDinoGameModal() {
+    var tickets = getDinoTickets();
+    var modal = document.getElementById('dino-game-modal');
+    modal.classList.remove('hidden');
+
+    document.getElementById('dino-hi-score').textContent = String(dinoHighScore).padStart(5, '0');
+    document.getElementById('dino-cur-score').textContent = '00000';
+    document.getElementById('dino-modal-tickets').textContent = tickets;
+
+    document.getElementById('dino-start-overlay').classList.remove('hidden');
+    document.getElementById('dino-gameover-overlay').classList.add('hidden');
+
+    initDinoCanvas();
+  }
+
+  function closeDinoGameModal() {
+    if (dinoGameLoopId) cancelAnimationFrame(dinoGameLoopId);
+    dinoGameRunning = false;
+    document.getElementById('dino-game-modal').classList.add('hidden');
+    updateDinoBanner();
+  }
+
+  // Dino Physics & Entities
+  var dino = { x: 40, y: 130, w: 26, h: 32, vy: 0, jumpPower: -9.5, gravity: 0.48, grounded: true, leg: 0 };
+  var obstacles = [];
+  var clouds = [];
+  var groundOffset = 0;
+  var gameSpeed = 3.5;
+  var spawnTimer = 0;
+
+  function initDinoCanvas() {
+    var canvas = document.getElementById('dinoCanvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+
+    dino.y = 130;
+    dino.vy = 0;
+    dino.grounded = true;
+    obstacles = [];
+    clouds = [{ x: 80, y: 30 }, { x: 220, y: 45 }, { x: 340, y: 25 }];
+    gameSpeed = 3.5;
+    dinoScore = 0;
+
+    // Draw initial idle frame
+    drawDinoScene(ctx);
+  }
+
+  function startDinoGame() {
+    var tickets = getDinoTickets();
+    if (tickets <= 0) {
+      showToast("⚠️ 남은 티켓이 없습니다! 퀘스트 승인 후 이용 가능합니다.", 3000);
+      return;
+    }
+
+    document.getElementById('dino-start-overlay').classList.add('hidden');
+    document.getElementById('dino-gameover-overlay').classList.add('hidden');
+
+    initDinoCanvas();
+    dinoGameRunning = true;
+    playBeep(440, 'square', 0.1);
+
+    var canvas = document.getElementById('dinoCanvas');
+    var ctx = canvas.getContext('2d');
+    var lastTime = performance.now();
+
+    function loop(now) {
+      if (!dinoGameRunning) return;
+      var dt = Math.min(32, now - lastTime);
+      lastTime = now;
+
+      updateDino(dt);
+      drawDinoScene(ctx);
+
+      dinoGameLoopId = requestAnimationFrame(loop);
+    }
+    dinoGameLoopId = requestAnimationFrame(loop);
+  }
+
+  function triggerDinoJump() {
+    if (!dinoGameRunning) {
+      var startOverlay = document.getElementById('dino-start-overlay');
+      if (!startOverlay.classList.contains('hidden')) {
+        startDinoGame();
+        return;
+      }
+    }
+    if (dino.grounded && dinoGameRunning) {
+      dino.vy = dino.jumpPower;
+      dino.grounded = false;
+      playBeep(620, 'square', 0.08);
+    }
+  }
+
+  function updateDino(dt) {
+    // Jump physics
+    dino.vy += dino.gravity;
+    dino.y += dino.vy;
+    if (dino.y >= 130) {
+      dino.y = 130;
+      dino.vy = 0;
+      dino.grounded = true;
+    }
+
+    // Legs animation
+    dino.leg = (dino.leg + 0.2) % 2;
+
+    // Score & Speed
+    dinoScore += 0.2;
+    var curScoreInt = Math.floor(dinoScore);
+    document.getElementById('dino-cur-score').textContent = String(curScoreInt).padStart(5, '0');
+    if (curScoreInt > dinoHighScore) {
+      dinoHighScore = curScoreInt;
+      localStorage.setItem('dino_hi_score', dinoHighScore);
+      document.getElementById('dino-hi-score').textContent = String(dinoHighScore).padStart(5, '0');
+    }
+
+    // Milestone sound every 100 points
+    if (curScoreInt > 0 && curScoreInt % 100 === 0 && Math.floor(dinoScore - 0.2) % 100 !== 0) {
+      playBeep(880, 'square', 0.15);
+    }
+
+    gameSpeed = 3.5 + Math.min(3.5, curScoreInt / 250);
+
+    // Ground scroll
+    groundOffset = (groundOffset + gameSpeed) % 20;
+
+    // Clouds
+    clouds.forEach(function(c) {
+      c.x -= gameSpeed * 0.25;
+      if (c.x < -40) c.x = 420;
+    });
+
+    // Spawn Obstacles (Cactus or Pterodactyl)
+    spawnTimer += dt;
+    if (spawnTimer > (1400 / (gameSpeed / 3.5)) + Math.random() * 800) {
+      spawnTimer = 0;
+      var isBird = curScoreInt > 150 && Math.random() > 0.65;
+      if (isBird) {
+        obstacles.push({ x: 420, y: 105, w: 24, h: 16, type: 'bird', frame: 0 });
+      } else {
+        var isDouble = Math.random() > 0.6;
+        obstacles.push({ x: 420, y: 134, w: isDouble ? 22 : 14, h: 28, type: 'cactus' });
+      }
+    }
+
+    // Update Obstacles & Collision Check
+    for (var i = obstacles.length - 1; i >= 0; i--) {
+      var ob = obstacles[i];
+      ob.x -= gameSpeed;
+
+      // Hitbox check
+      var hitMargin = 4;
+      if (
+        dino.x + hitMargin < ob.x + ob.w - hitMargin &&
+        dino.x + dino.w - hitMargin > ob.x + hitMargin &&
+        dino.y + hitMargin < ob.y + ob.h - hitMargin &&
+        dino.y + dino.h - hitMargin > ob.y + hitMargin
+      ) {
+        handleDinoGameOver();
+        return;
+      }
+
+      if (ob.x < -30) obstacles.splice(i, 1);
+    }
+  }
+
+  function handleDinoGameOver() {
+    dinoGameRunning = false;
+    if (dinoGameLoopId) cancelAnimationFrame(dinoGameLoopId);
+    playBeep(180, 'sawtooth', 0.35);
+
+    // DEDUCT 1 TICKET IMMEDIATELY (Strict 1-play constraint)
+    var curTickets = getDinoTickets();
+    curTickets = Math.max(0, curTickets - 1);
+    localStorage.setItem('dino_game_tickets', curTickets);
+
+    var finalScore = Math.floor(dinoScore);
+    document.getElementById('dino-final-score').textContent = finalScore;
+    document.getElementById('dino-modal-tickets').textContent = curTickets;
+
+    var retryBtn = document.getElementById('btn-dino-retry');
+    var msgEl = document.getElementById('dino-over-msg');
+
+    if (curTickets > 0) {
+      retryBtn.classList.remove('hidden');
+      retryBtn.textContent = '🎮 남은 티켓(' + curTickets + '장)으로 계속하기';
+      msgEl.textContent = '아쉽게 부딪혔어! 하지만 아직 티켓이 남아있어!';
+    } else {
+      retryBtn.classList.add('hidden');
+      msgEl.textContent = '멋진 질주였어! 다음 퀘스트를 완료하고 부모님께 승인받으면 또 1판 달릴 수 있어! ⚡';
+    }
+
+    document.getElementById('dino-gameover-overlay').classList.remove('hidden');
+    updateDinoBanner();
+  }
+
+  function retryDinoGame() {
+    var tickets = getDinoTickets();
+    if (tickets <= 0) {
+      showToast("⚠️ 티켓이 모두 소진되었습니다!", 3000);
+      return;
+    }
+    startDinoGame();
+  }
+
+  function drawDinoScene(ctx) {
+    ctx.fillStyle = '#0B0F19';
+    ctx.fillRect(0, 0, 400, 180);
+
+    // Stars / Sparkles in night sky
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.fillRect(40, 20, 2, 2);
+    ctx.fillRect(120, 15, 2, 2);
+    ctx.fillRect(190, 35, 1.5, 1.5);
+    ctx.fillRect(280, 18, 2, 2);
+    ctx.fillRect(350, 40, 2, 2);
+
+    // Clouds
+    ctx.fillStyle = '#1E293B';
+    clouds.forEach(function(c) {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, 10, 0, Math.PI * 2);
+      ctx.arc(c.x + 10, c.y - 4, 12, 0, Math.PI * 2);
+      ctx.arc(c.x + 22, c.y, 10, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Ground line
+    ctx.strokeStyle = '#334155';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(0, 162);
+    ctx.lineTo(400, 162);
+    ctx.stroke();
+
+    // Ground dots
+    ctx.fillStyle = '#475569';
+    for (var x = -groundOffset; x < 400; x += 18) {
+      ctx.fillRect(x, 165, 3, 2);
+      if (x % 36 === 0) ctx.fillRect(x + 8, 168, 4, 2);
+    }
+
+    // Draw Obstacles
+    obstacles.forEach(function(ob) {
+      if (ob.type === 'cactus') {
+        ctx.fillStyle = '#10B981'; // Cyber emerald cactus
+        ctx.fillRect(ob.x + 4, ob.y, ob.w - 8, ob.h);
+        // Arms
+        ctx.fillRect(ob.x, ob.y + 6, 4, 10);
+        ctx.fillRect(ob.x + ob.w - 4, ob.y + 10, 4, 10);
+      } else {
+        // Pterodactyl (Bird)
+        ctx.fillStyle = '#F59E0B'; // Gold bird
+        ctx.fillRect(ob.x, ob.y, ob.w, ob.h - 6);
+        ctx.fillRect(ob.x + 6, ob.y - 4, 8, 4); // wing
+      }
+    });
+
+    // Draw T-Rex (Retro Pixel Dino)
+    ctx.fillStyle = '#A78BFA'; // Cyber neon purple T-Rex!
+    var dx = dino.x, dy = dino.y;
+    // Head & Snout
+    ctx.fillRect(dx + 12, dy, 14, 12);
+    ctx.fillRect(dx + 18, dy + 2, 8, 8);
+    // Eye (cutout)
+    ctx.fillStyle = '#0B0F19';
+    ctx.fillRect(dx + 15, dy + 2, 3, 3);
+    // Body
+    ctx.fillStyle = '#A78BFA';
+    ctx.fillRect(dx + 6, dy + 10, 14, 14);
+    // Tiny arm
+    ctx.fillRect(dx + 18, dy + 14, 4, 2);
+    // Tail
+    ctx.fillRect(dx, dy + 12, 6, 6);
+    ctx.fillRect(dx + 2, dy + 8, 4, 4);
+    // Legs
+    if (dino.grounded) {
+      if (Math.floor(dino.leg) === 0) {
+        ctx.fillRect(dx + 8, dy + 24, 3, 8);
+        ctx.fillRect(dx + 15, dy + 24, 3, 5);
+      } else {
+        ctx.fillRect(dx + 8, dy + 24, 3, 5);
+        ctx.fillRect(dx + 15, dy + 24, 3, 8);
+      }
+    } else {
+      // Jumping legs tucked
+      ctx.fillRect(dx + 8, dy + 24, 3, 5);
+      ctx.fillRect(dx + 14, dy + 24, 3, 5);
+    }
+  }
+
+  // Setup Event Listeners for Dino Game
+  window.addEventListener('load', function() {
+    updateDinoBanner();
+
+    var jumpBtn = document.getElementById('btn-dino-jump');
+    if (jumpBtn) {
+      jumpBtn.addEventListener('mousedown', function(e) { e.preventDefault(); triggerDinoJump(); });
+      jumpBtn.addEventListener('touchstart', function(e) { e.preventDefault(); triggerDinoJump(); }, { passive: false });
+    }
+
+    var canvas = document.getElementById('dinoCanvas');
+    if (canvas) {
+      canvas.addEventListener('mousedown', function(e) { e.preventDefault(); triggerDinoJump(); });
+      canvas.addEventListener('touchstart', function(e) { e.preventDefault(); triggerDinoJump(); }, { passive: false });
+    }
+
+    window.addEventListener('keydown', function(e) {
+      var modal = document.getElementById('dino-game-modal');
+      if (modal && !modal.classList.contains('hidden')) {
+        if (e.code === 'Space' || e.code === 'ArrowUp') {
+          e.preventDefault();
+          triggerDinoJump();
+        }
+      }
+    });
+  });
+
   </script>
+
+  <!-- 🦖 CHROME DINO RUNNER ARCADE MODAL (부모 승인 1판 보너스 게임) -->
+  <div id="dino-game-modal" class="modal-bg center hidden" style="z-index: 9999;">
+    <div class="card w-full max-w-md mx-3 p-4 bg-[#0F172A] border-2 border-violet-500 rounded-3xl shadow-2xl relative text-white">
+      
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl animate-bounce">🦖</span>
+          <div>
+            <div class="text-sm font-black text-white">T-Rex 공룡 점프 달리기</div>
+            <div class="text-[11px] text-amber-300 font-bold">부모님 퀘스트 승인 보너스 • 딱 1판!</div>
+          </div>
+        </div>
+        <button type="button" onclick="closeDinoGameModal()" class="tap text-slate-400 hover:text-white text-lg w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold">✕</button>
+      </div>
+
+      <!-- Score Bar -->
+      <div class="flex items-center justify-between bg-slate-900/80 border border-slate-800 rounded-xl px-3 py-2 mb-2 font-mono text-xs font-black">
+        <div class="text-amber-400">HI: <span id="dino-hi-score">00000</span></div>
+        <div class="text-emerald-400">SCORE: <span id="dino-cur-score">00000</span></div>
+        <div class="text-violet-400">🎟️ 남은 티켓: <span id="dino-modal-tickets">1</span>장</div>
+      </div>
+
+      <!-- Canvas Area -->
+      <div class="relative rounded-2xl overflow-hidden border border-violet-500/30 bg-[#0B0F19] mb-3">
+        <canvas id="dinoCanvas" width="400" height="180" class="w-full block touch-none"></canvas>
+        
+        <!-- Start Overlay -->
+        <div id="dino-start-overlay" class="absolute inset-0 bg-slate-950/75 flex flex-col items-center justify-center text-center p-4">
+          <div class="text-3xl mb-1">🦖</div>
+          <div class="text-sm font-black text-white mb-1">화면 터치 또는 점프 버튼으로 시작!</div>
+          <div class="text-xs text-slate-400 mb-3">선인장과 익룡을 피해 최대한 멀리 달려보세요!</div>
+          <button type="button" onclick="startDinoGame()" class="tap px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-black text-xs rounded-xl shadow-lg shadow-emerald-500/30">
+            ▶️ 지금 시작하기
+          </button>
+        </div>
+
+        <!-- Game Over Overlay -->
+        <div id="dino-gameover-overlay" class="hidden absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center text-center p-4">
+          <div class="text-3xl mb-1">💥</div>
+          <div class="text-base font-black text-rose-400 mb-0.5">GAME OVER</div>
+          <div class="text-xs text-slate-300 mb-2">최종 기록: <span id="dino-final-score" class="text-amber-400 font-bold">0</span> 점</div>
+          <p id="dino-over-msg" class="text-[11px] text-slate-400 max-w-[280px] leading-relaxed mb-3">
+            멋진 질주였어! 다음 퀘스트를 완료하고 부모님께 승인받으면 또 1판 달릴 수 있어! ⚡
+          </p>
+          <div class="flex gap-2 w-full max-w-[260px]">
+            <button type="button" id="btn-dino-retry" onclick="retryDinoGame()" class="tap flex-1 py-2.5 bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-md hidden">
+              🎮 1판 더 하기
+            </button>
+            <button type="button" onclick="closeDinoGameModal()" class="tap flex-1 py-2.5 bg-violet-600 hover:bg-violet-500 text-white font-black text-xs rounded-xl shadow-md">
+              🏰 퀘스트로 복귀
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Big Jump Control Button -->
+      <button type="button" id="btn-dino-jump" class="tap w-full py-3.5 bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 text-white font-black text-sm rounded-2xl shadow-lg shadow-violet-600/30 flex items-center justify-center gap-2 select-none active:scale-95 transition-transform">
+        <span>🔼 점프하기 (JUMP!)</span>
+        <span class="text-[11px] opacity-75 font-normal">(화면 터치도 가능)</span>
+      </button>
+
+    </div>
+  </div>
+
 </body>
 </html>
