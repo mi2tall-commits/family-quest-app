@@ -1095,9 +1095,9 @@
   <!-- ══════════════════════════════════════ -->
   <script>
   // ─── Global State & API Config ──────────────────────────────────
-  var DEFAULT_GAS_API_URL = "https://script.google.com/macros/s/AKfycbzEDNQaxzeNJRiv97T620aiRpDnhguXmgW6TuQWaL7fxrtyFm0_nTi-8l1keozCTb5L/exec";
+  var DEFAULT_GAS_API_URL = "https://script.google.com/macros/s/AKfycbxD04vpLuIh7ujmIgxOhka0cPKtMK0lMBN8SaWaX5MKSU5AoOQRZtd4Ioc0-4SMOMbD/exec";
   var storedApiUrl = localStorage.getItem("FAMILY_QUEST_API_URL");
-  if (storedApiUrl && (storedApiUrl.indexOf("AKfycbxD04") !== -1 || storedApiUrl.indexOf("YOUR_DEPLOY_ID") !== -1)) {
+  if (storedApiUrl && (storedApiUrl.indexOf("AKfycbzEDN") !== -1 || storedApiUrl.indexOf("YOUR_DEPLOY_ID") !== -1)) {
     localStorage.removeItem("FAMILY_QUEST_API_URL");
     storedApiUrl = "";
   }

@@ -11,19 +11,24 @@
  * 🔑 승인자 PIN은 Users 시트 PIN 컬럼에서 읽어옴
  */
 
-// ⚠️ 김가네 용돈퀘스트 스프레드시트 ID (교체 완료)
-// Spreadsheet URL: https://docs.google.com/spreadsheets/d/1GWeFz6kLzZSPz_XBhwO7cT69jSL2G5J4aWSC6EF1Hb4/edit
-const SPREADSHEET_ID = "1GWeFz6kLzZSPz_XBhwO7cT69jSL2G5J4aWSC6EF1Hb4";
-const FOLDER_ID      = "";  // 사진 저장 폴더 ID (비워두면 자동 생성)
+const SPREADSHEET_ID = "1qEMF1AJZZzKaLm__hN_gXq_y5e95JuecwH3rFBj2uIw";
+const FOLDER_ID      = "1d-KI3hOXBgnZSWlu4qHG8V_634EpWTyT";
 const FOLDER_NAME    = "FamilyQuest_Uploads";
 const XP_PER_LEVEL   = 2500;
 
 // ────────────────────────────────────────────────
-// 진입점 (HTML 웹앱 & REST API 하이브리드)
+// 진입점
 // ────────────────────────────────────────────────
 function doGet(e) {
-  if (e && e.parameter && (e.parameter.action === "getAppData" || e.parameter.api === "true" || e.parameter.format === "json")) {
-    return ContentService.createTextOutput(JSON.stringify(getAppData()))
+  if (e && e.parameter && e.parameter.action) {
+    var action = e.parameter.action;
+    var res = { success: false };
+    try {
+      if (action === 'getAppData') res = getAppData();
+    } catch(err) {
+      res = { success: false, error: err.message };
+    }
+    return ContentService.createTextOutput(JSON.stringify(res))
       .setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -35,35 +40,28 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  var res = { success: false };
   try {
-    var raw = e && e.postData ? e.postData.contents : "{}";
-    var payload = {};
-    try { payload = JSON.parse(raw); } catch(err) { payload = e.parameter || {}; }
-
-    var action = payload.action || (e.parameter ? e.parameter.action : "");
-    var data = payload.data || payload;
-    var result = { success: false, error: "알 수 없는 요청입니다." };
-
-    if (action === "getAppData") {
-      result = getAppData();
-    } else if (action === "completeQuest") {
-      result = completeQuest(data);
-    } else if (action === "approveQuest") {
-      result = approveQuest(data);
-    } else if (action === "rejectQuest") {
-      result = rejectQuest(data);
-    } else if (action === "redeemReward") {
-      result = redeemReward(data);
-    } else if (action === "useInventoryItem") {
-      result = useInventoryItem(data);
+    var postData = {};
+    if (e && e.postData && e.postData.contents) {
+      try { postData = JSON.parse(e.postData.contents); } catch(pErr) { postData = e.parameter || {}; }
+    } else if (e && e.parameter) {
+      postData = e.parameter;
     }
+    var action = postData.action;
+    var payload = postData.payload || postData;
 
-    return ContentService.createTextOutput(JSON.stringify(result))
-      .setMimeType(ContentService.MimeType.JSON);
+    if (action === 'getAppData') res = getAppData();
+    else if (action === 'completeQuest') res = completeQuest(payload);
+    else if (action === 'approveQuest') res = approveQuest(payload);
+    else if (action === 'rejectQuest') res = rejectQuest(payload);
+    else if (action === 'redeemReward') res = redeemReward(payload);
+    else if (action === 'useInventoryItem') res = useInventoryItem(payload);
   } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, error: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
+    res = { success: false, error: err.message };
   }
+  return ContentService.createTextOutput(JSON.stringify(res))
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 // ────────────────────────────────────────────────
@@ -213,7 +211,7 @@ function getAppData() {
 
     // 아이 프로필 (CHILD)
     var childProfile = profiles.find(function(p) { return p.role === "CHILD"; }) || {
-      id: "child_1", name: "우리아이 (용사)", role: "CHILD", pin: "", points: 0, totalExp: 0, icon: "🧒"
+      id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD", pin: "", points: 7400, totalExp: 7400, icon: "🧒"
     };
 
     var totalXp = childProfile.totalExp || childProfile.points || 0;
@@ -280,11 +278,11 @@ function getAppData() {
 
     var tz = Session.getScriptTimeZone();
     var logList = logs.map(function(log) {
-      var rawStatus = String(getField(log, "status", "상태") || "APPROVED").trim();
+      var rawStatus = String(getField(log, "status", "상태") || "PENDING").trim();
       var upperSt   = rawStatus.toUpperCase();
-      var status    = upperSt === "PENDING" || rawStatus === "대기" || rawStatus === "심의대기" ? "PENDING"
-                    : upperSt === "REJECTED" || rawStatus === "반려" ? "REJECTED"
-                    : "APPROVED";
+      var status    = (upperSt === "APPROVED" || rawStatus === "승인") ? "APPROVED"
+                    : (upperSt === "REJECTED" || rawStatus === "반려") ? "REJECTED"
+                    : "PENDING";
 
       var rawPhoto  = String(getField(log, "photoUrl", "photo_url", "photo", "photos", "사진", "인증사진") || "").trim();
       var photoStr  = "";
@@ -739,7 +737,6 @@ function getDefaultQuests() {
 
 function getDefaultShopItems() {
   return [
-    { id: "R-000", title: "🦖 공룡 미니게임 획득권",           cost: 500,  category: "게임",     icon: "🦖", desc: "퀘스트 승인 시 자동 활성화되는 신나는 공룡 미니게임 입장권" },
     { id: "R-001", title: "🎮 주말 게임 30분 쿠폰",            cost: 1500, category: "자유시간", icon: "🎮", desc: "스마트폰/콘솔 게임 30분 추가 자유 이용권" },
     { id: "R-002", title: "🍦 베스킨라빈스 싱글팅 아이스크림", cost: 3000, category: "간식",     icon: "🍦", desc: "좋아하는 맛 아이스크림 1개 보상 교환" },
     { id: "R-003", title: "💰 용돈 3,000원 현금 환전",         cost: 3000, category: "용돈",     icon: "💵", desc: "모은 포인트를 즉시 3천원 현금 용돈으로 교환!" },
@@ -751,17 +748,17 @@ function getDefaultShopItems() {
 function getFallbackData() {
   return {
     profiles:   [
-      { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  pin: "",     points: 0, totalExp: 0, icon: "🧒" },
-      { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", pin: "1121", points: 0, totalExp: 0, icon: "👩" },
-      { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", pin: "7590", points: 0, totalExp: 0, icon: "👨" }
+      { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  pin: "",     points: 7400, totalExp: 7400, icon: "🧒" },
+      { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", pin: "1121", points: 0,    totalExp: 0,    icon: "👩" },
+      { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", pin: "7590", points: 0,    totalExp: 0,    icon: "👨" }
     ],
     parentPins: { mom: "1121", dad: "7590" },
     child: {
       id: "child_1", name: "상급종합빡빡이(용사)", icon: "🧒",
-      level: 1, title: "🌱 새내기 견습 모험가",
-      totalExp: 0, currentBalance: 0,
+      level: 3, title: "⭐ 든든한 퀘스트 챔피언",
+      totalExp: 7400, currentBalance: 7400,
       targetItem: "🎮 플레이스테이션", targetPoints: 100000,
-      progressPct: 0, lvProgress: 0, nextLvXp: 2500
+      progressPct: 8, lvProgress: 2400, nextLvXp: 2500
     },
     quests:         getDefaultQuests(),
     shopItems:      getDefaultShopItems(),
@@ -770,4 +767,3 @@ function getFallbackData() {
     inventory:      []
   };
 }
-
