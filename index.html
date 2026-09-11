@@ -1155,7 +1155,7 @@
       fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: action, data: payload })
+        body: JSON.stringify({ action: action, payload: payload, data: payload })
       })
         .then(function(res) { return res.json(); })
         .then(function(data) { onSuccess(data); })
@@ -1624,22 +1624,43 @@
   // ─── Approve / Reject ────────────────────────────────────────────
   function approveAction(logId, title, points, userId) {
     var comment = (document.getElementById("comment-" + logId) || {}).value || "";
+    var pts = Number(points) || 300;
+
+    // ⚡ Realtime Optimistic UI: 버튼 누르는 즉시 화면에서 승인탭 제거 및 포인트/XP 반영
+    if (appData) {
+      if (appData.pendingReviews) {
+        appData.pendingReviews = appData.pendingReviews.filter(function(r) { return r.id !== logId; });
+      }
+      if (appData.child) {
+        appData.child.currentBalance = (Number(appData.child.currentBalance) || 0) + pts;
+        appData.child.totalExp = (Number(appData.child.totalExp) || 0) + pts;
+      }
+      renderAll();
+    }
+
+    // 🦖 즉시 공룡 미니게임 획득권 1장 부여 및 배너 활성화
+    var curTickets = parseInt(localStorage.getItem('dino_game_tickets') || '0') + 1;
+    localStorage.setItem('dino_game_tickets', curTickets);
+    updateDinoBanner();
+
+    confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+    showToast("✅ 승인 완료! (+ " + num(pts) + " P) 🎮 공룡 게임 티켓 1장 획득!", 3500);
+
     callApi("approveQuest", {
-      logId: logId, title: title, points: points, userId: userId,
+      logId: logId, title: title, points: pts, userId: userId,
       comment: comment, approvedBy: currentUser.name
     }, function(res) {
       if (res && res.success) {
-        // 🦖 Award 1 Dino Game Ticket upon parent approval!
-        var curTickets = parseInt(localStorage.getItem('dino_game_tickets') || '0') + 1;
-        localStorage.setItem('dino_game_tickets', curTickets);
-        updateDinoBanner();
-
-        confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
-        showToast("✅ 승인 완료! (+ " + num(points) + " P) 🎮 공룡 게임 티켓 1장 획득!", 4000);
-        if (res.appData) { appData = res.appData; renderAll(); }
+        if (res.appData) {
+          appData = res.appData;
+          renderAll();
+        }
       } else {
-        showToast("⚠️ " + (res && res.error ? res.error : "오류"), 3000);
+        showToast("⚠️ " + (res && res.error ? res.error : "오류 발생"), 3500);
+        loadData();
       }
+    }, function(err) {
+      showToast("⚠️ 서버 동기화 지연: " + err, 3500);
     });
   }
 

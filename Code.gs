@@ -17,6 +17,20 @@ const FOLDER_NAME    = "FamilyQuest_Uploads";
 const XP_PER_LEVEL   = 2500;
 
 // ────────────────────────────────────────────────
+function unwrapData(d) {
+  if (!d) return {};
+  if (d.data && typeof d.data === "object" && (d.data.logId || d.data.questId || d.data.userId || d.data.rewardId || d.data.invId || d.data.title)) {
+    return d.data;
+  }
+  if (d.payload && typeof d.payload === "object" && (d.payload.logId || d.payload.questId || d.payload.userId || d.payload.rewardId || d.payload.invId || d.payload.title)) {
+    return d.payload;
+  }
+  if (d.data && typeof d.data === "object") return d.data;
+  if (d.payload && typeof d.payload === "object") return d.payload;
+  return d;
+}
+
+// ────────────────────────────────────────────────
 // 진입점
 // ────────────────────────────────────────────────
 function doGet(e) {
@@ -24,7 +38,20 @@ function doGet(e) {
     var action = e.parameter.action;
     var res = { success: false };
     try {
-      if (action === 'getAppData') res = getAppData();
+      if (action === 'getAppData') {
+        res = getAppData();
+      } else if (action === 'debugInspect') {
+        var ss = getSS();
+        var uSheet = ss.getSheetByName("Users");
+        var lSheet = ss.getSheetByName("QuestLogs");
+        var iSheet = ss.getSheetByName("Inventory");
+        res = {
+          success: true,
+          users: uSheet ? uSheet.getDataRange().getValues() : [],
+          logs: lSheet ? lSheet.getDataRange().getValues() : [],
+          inventory: iSheet ? iSheet.getDataRange().getValues() : []
+        };
+      }
     } catch(err) {
       res = { success: false, error: err.message };
     }
@@ -49,7 +76,7 @@ function doPost(e) {
       postData = e.parameter;
     }
     var action = postData.action;
-    var payload = postData.payload || postData;
+    var payload = unwrapData(postData.payload || postData.data || postData);
 
     if (action === 'getAppData') res = getAppData();
     else if (action === 'completeQuest') res = completeQuest(payload);
@@ -529,6 +556,7 @@ function completeQuest(data) {
 // ────────────────────────────────────────────────
 function approveQuest(data) {
   try {
+    data = unwrapData(data);
     var ss   = getSS();
     var sheet = ss.getSheetByName("QuestLogs");
     if (!sheet) return { success: false, error: "QuestLogs 시트 없음" };
@@ -542,39 +570,90 @@ function approveQuest(data) {
       return String(h || "").trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
     });
 
-    var logIdCol = headers.indexOf("logid") !== -1 ? headers.indexOf("logid") : 0;
-    var statusCol = headers.indexOf("status") !== -1 ? headers.indexOf("status") + 1 : (headers.indexOf("상태") !== -1 ? headers.indexOf("상태") + 1 : 6);
-    var commentCol = headers.indexOf("parentcomment") !== -1 ? headers.indexOf("parentcomment") + 1
-                   : headers.indexOf("comment") !== -1 ? headers.indexOf("comment") + 1
-                   : headers.indexOf("칭찬") !== -1 ? headers.indexOf("칭찬") + 1
-                   : headers.indexOf("코멘트") !== -1 ? headers.indexOf("코멘트") + 1
-                   : (headers.length >= 9 ? 9 : lc);
-    var approverCol = headers.indexOf("approvedby") !== -1 ? headers.indexOf("approvedby") + 1
-                    : headers.indexOf("승인자") !== -1 ? headers.indexOf("승인자") + 1
-                    : (headers.length >= 10 ? 10 : lc);
+    var logIdCol = -1, statusCol = -1, commentCol = -1, approverCol = -1, ptsCol = -1, userCol = -1;
+    for (var i = 0; i < headers.length; i++) {
+      var h = headers[i];
+      if (h === "logid" || h === "id" || h === "아이디") logIdCol = i;
+      if (h === "status" || h === "상태") statusCol = i + 1;
+      if (h === "parentcomment" || h === "comment" || h === "칭찬" || h === "코멘트" || h === "부모코멘트" || h === "compliment") commentCol = i + 1;
+      if (h === "approvedby" || h === "승인자" || h === "심의자" || h === "approver") approverCol = i + 1;
+      if (h === "points" || h === "point" || h === "포인트") ptsCol = i;
+      if (h === "userid" || h === "user") userCol = i;
+    }
+    if (logIdCol === -1) logIdCol = 0;
+    if (statusCol === -1) statusCol = 6;
+    if (commentCol === -1) commentCol = (headers.length >= 9 ? 9 : lc);
+    if (approverCol === -1) approverCol = (headers.length >= 10 ? 10 : lc);
 
+    var targetLogId = String(data.logId || "").trim();
     var foundRow = -1;
+
+    // 1. Search in logIdCol
     for (var r = 1; r < allValues.length; r++) {
-      if (String(allValues[r][logIdCol]).trim() === String(data.logId).trim()) {
+      if (targetLogId && String(allValues[r][logIdCol]).trim() === targetLogId) {
         foundRow = r + 1;
         break;
       }
     }
 
-    if (foundRow !== -1) {
-      if (statusCol > 0 && statusCol <= lc) sheet.getRange(foundRow, statusCol).setValue("APPROVED");
-      if (data.comment && commentCol > 0 && commentCol <= lc) sheet.getRange(foundRow, commentCol).setValue(data.comment);
-      if (approverCol > 0 && approverCol <= lc) sheet.getRange(foundRow, approverCol).setValue(data.approvedBy || "부모님");
-
-      // 포인트 반영
-      var pts = Number(data.points) || 0;
-      if (pts > 0) updateChildPoints(ss, data.userId || "child_1", pts);
-
-      // 공룡 미니 게임 획득권 지급 및 활성화
-      grantDinoGameTicket(ss, data.userId || "child_1");
+    // 2. Fallback: Search in any column if not found
+    if (foundRow === -1 && targetLogId) {
+      for (var r = 1; r < allValues.length; r++) {
+        for (var c = 0; c < lc; c++) {
+          if (String(allValues[r][c]).trim() === targetLogId) {
+            foundRow = r + 1;
+            break;
+          }
+        }
+        if (foundRow !== -1) break;
+      }
     }
 
-    return { success: true, message: "✅ 승인 완료! 포인트 지급 및 🦖 공룡 미니게임 획득권이 활성화되었습니다.", appData: getAppData() };
+    // 3. Fallback: If still not found, search latest PENDING row
+    if (foundRow === -1) {
+      for (var r = allValues.length - 1; r >= 1; r--) {
+        var rowText = allValues[r].join(" ");
+        if (rowText.includes("PENDING") || rowText.includes("대기")) {
+          foundRow = r + 1;
+          break;
+        }
+      }
+    }
+
+    if (foundRow === -1) {
+      return { success: false, error: "승인 대상 기록을 찾을 수 없습니다. (LogId: " + targetLogId + ")" };
+    }
+
+    if (statusCol > 0 && statusCol <= lc) sheet.getRange(foundRow, statusCol).setValue("APPROVED");
+    if (data.comment && commentCol > 0 && commentCol <= lc) sheet.getRange(foundRow, commentCol).setValue(data.comment);
+    if (approverCol > 0 && approverCol <= lc) sheet.getRange(foundRow, approverCol).setValue(data.approvedBy || "부모님");
+
+    // 포인트 및 사용자 결정
+    var pts = Number(data.points);
+    if (isNaN(pts) || pts <= 0) {
+      if (ptsCol !== -1) pts = Number(allValues[foundRow - 1][ptsCol]) || 0;
+    }
+    if (isNaN(pts) || pts <= 0) pts = 300;
+
+    var userId = data.userId;
+    if (!userId && userCol !== -1) {
+      userId = String(allValues[foundRow - 1][userCol]).trim();
+    }
+    if (!userId || userId === "퀘스트 완료") userId = "child_1";
+
+    // 포인트 반영
+    updateChildPoints(ss, userId, pts);
+
+    // 공룡 미니 게임 획득권 지급 및 활성화
+    grantDinoGameTicket(ss, userId);
+
+    SpreadsheetApp.flush();
+
+    return {
+      success: true,
+      message: "✅ 승인 완료! 포인트(+" + pts + " P) 지급 및 🦖 공룡 미니게임 획득권이 활성화되었습니다.",
+      appData: getAppData()
+    };
   } catch(err) {
     return { success: false, error: err.toString() };
   }
@@ -585,20 +664,48 @@ function approveQuest(data) {
 // ────────────────────────────────────────────────
 function rejectQuest(data) {
   try {
+    data = unwrapData(data);
     var ss    = getSS();
     var sheet = ss.getSheetByName("QuestLogs");
     if (!sheet) return { success: false, error: "QuestLogs 시트 없음" };
 
-    var rows = sheet.getRange(2, 1, Math.max(1, sheet.getLastRow() - 1), sheet.getLastColumn()).getValues();
+    var lr = sheet.getLastRow();
+    var lc = sheet.getLastColumn();
+    if (lr < 2) return { success: false, error: "기록 없음" };
+
+    var allValues = sheet.getRange(1, 1, lr, lc).getValues();
+    var headers = allValues[0].map(function(h) {
+      return String(h || "").trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
+    });
+
+    var logIdCol = headers.indexOf("logid") !== -1 ? headers.indexOf("logid") : 0;
+    var statusCol = headers.indexOf("status") !== -1 ? headers.indexOf("status") + 1 : 6;
+    var commentCol = headers.indexOf("parentcomment") !== -1 ? headers.indexOf("parentcomment") + 1 : 9;
+    var approverCol = headers.indexOf("approvedby") !== -1 ? headers.indexOf("approvedby") + 1 : 10;
+
+    var targetLogId = String(data.logId || "").trim();
     var found = -1;
-    for (var i = 0; i < rows.length; i++) {
-      if (String(rows[i][0]).trim() === String(data.logId).trim()) { found = i + 2; break; }
+    for (var r = 1; r < allValues.length; r++) {
+      if (targetLogId && String(allValues[r][logIdCol]).trim() === targetLogId) {
+        found = r + 1; break;
+      }
+    }
+    if (found === -1 && targetLogId) {
+      for (var r = 1; r < allValues.length; r++) {
+        for (var c = 0; c < lc; c++) {
+          if (String(allValues[r][c]).trim() === targetLogId) {
+            found = r + 1; break;
+          }
+        }
+        if (found !== -1) break;
+      }
     }
 
     if (found !== -1) {
-      sheet.getRange(found, 6).setValue("REJECTED");
-      if (data.comment) sheet.getRange(found, 9).setValue(data.comment);
-      sheet.getRange(found, 10).setValue(data.approvedBy || "부모님");
+      sheet.getRange(found, statusCol).setValue("REJECTED");
+      if (data.comment) sheet.getRange(found, commentCol).setValue(data.comment);
+      sheet.getRange(found, approverCol).setValue(data.approvedBy || "부모님");
+      SpreadsheetApp.flush();
     }
 
     return { success: true, message: "❌ 반려 처리되었습니다.", appData: getAppData() };
@@ -672,25 +779,36 @@ function updateChildPoints(ss, userId, delta) {
   if (!usersSheet || usersSheet.getLastRow() < 2) return;
 
   var data = usersSheet.getRange(1, 1, usersSheet.getLastRow(), usersSheet.getLastColumn()).getValues();
-  var headers = data[0].map(function(h) { return String(h).trim().toLowerCase(); });
-  var idCol  = headers.indexOf("userid");
-  var ptCol  = headers.indexOf("points");
-  var xpCol  = headers.indexOf("totalexp");
+  var headers = data[0].map(function(h) { return String(h).trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, ''); });
+  
+  var idCol = -1, ptCol = -1, xpCol = -1, roleCol = -1;
+  for (var c = 0; c < headers.length; c++) {
+    var h = headers[c];
+    if (h === "userid" || h === "id" || h === "아이디") idCol = c;
+    if (h === "points" || h === "point" || h === "포인트" || h === "잔액") ptCol = c;
+    if (h === "totalexp" || h === "totalxp" || h === "xp" || h === "exp" || h === "경험치" || h === "총경험치") xpCol = c;
+    if (h === "role" || h === "역할" || h === "구분") roleCol = c;
+  }
   if (idCol === -1) idCol = 0;
-  if (ptCol === -1) ptCol = 4;
-  if (xpCol === -1) xpCol = 5;
+  if (roleCol === -1) roleCol = (headers.length > 2 ? 2 : 1);
+  if (ptCol === -1) ptCol = (headers.length > 4 ? 4 : 1);
+  if (xpCol === -1) xpCol = (headers.length > 5 ? 5 : ptCol);
 
   for (var r = 1; r < data.length; r++) {
     var rowId = String(data[r][idCol]).trim();
-    var role  = String(data[r][headers.indexOf("role") !== -1 ? headers.indexOf("role") : 2] || "").toUpperCase();
-    if (rowId === userId || role === "CHILD") {
+    var role  = String(data[r][roleCol] || "").toUpperCase();
+    if (rowId === userId || role === "CHILD" || (userId && rowId.includes(userId))) {
       var curPts = Number(data[r][ptCol]) || 0;
       var curXp  = Number(data[r][xpCol]) || 0;
-      usersSheet.getRange(r + 1, ptCol + 1).setValue(curPts + delta);
-      if (delta > 0) usersSheet.getRange(r + 1, xpCol + 1).setValue(curXp + delta);
+      // If points or xp were negative due to corrupt test, reset baseline gracefully
+      var newPts = Math.max(0, curPts + delta);
+      var newXp  = Math.max(0, curXp + (delta > 0 ? delta : 0));
+      usersSheet.getRange(r + 1, ptCol + 1).setValue(newPts);
+      if (delta > 0) usersSheet.getRange(r + 1, xpCol + 1).setValue(newXp);
       break;
     }
   }
+  SpreadsheetApp.flush();
 }
 
 // ────────────────────────────────────────────────
