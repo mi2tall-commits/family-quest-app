@@ -84,6 +84,7 @@ function doPost(e) {
     else if (action === 'rejectQuest') res = rejectQuest(payload);
     else if (action === 'redeemReward') res = redeemReward(payload);
     else if (action === 'useInventoryItem') res = useInventoryItem(payload);
+    else if (action === 'cleanupTestData') res = cleanupTestData(payload);
   } catch(err) {
     res = { success: false, error: err.message };
   }
@@ -525,8 +526,10 @@ function completeQuest(data) {
       if (clean === "status" || clean === "상태") return status;
       if (clean === "photourl" || clean === "photo" || clean === "사진" || clean === "인증사진") return photoStr;
       if (clean === "memo" || clean === "소감" || clean === "메모") return data.memo || "";
-      if (clean === "parentcomment" || clean === "comment" || clean === "칭찬") return "";
-      if (clean === "approvedby" || clean === "승인자") return isParent ? (data.approvedBy || "부모님") : "";
+      if (clean === "reviewedby" || clean === "approvedby" || clean === "승인자" || clean === "심의자") return isParent ? (data.approvedBy || "부모님") : "";
+      if (clean === "reviewedat" || clean === "승인일시" || clean === "심의일시") return isParent ? nowStr : "";
+      if (clean === "rejectreason" || clean === "반려사유") return "";
+      if (clean === "compliment" || clean === "parentcomment" || clean === "comment" || clean === "칭찬") return isParent ? (data.comment || "승인 완료! 참 잘했어요! 👏") : "";
       return "";
     });
 
@@ -570,20 +573,20 @@ function approveQuest(data) {
       return String(h || "").trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
     });
 
-    var logIdCol = -1, statusCol = -1, commentCol = -1, approverCol = -1, ptsCol = -1, userCol = -1;
+    var logIdCol = -1, statusCol = -1, complimentCol = -1, rejectCol = -1, approverCol = -1, reviewedAtCol = -1, ptsCol = -1, userCol = -1;
     for (var i = 0; i < headers.length; i++) {
       var h = headers[i];
       if (h === "logid" || h === "id" || h === "아이디") logIdCol = i;
       if (h === "status" || h === "상태") statusCol = i + 1;
-      if (h === "parentcomment" || h === "comment" || h === "칭찬" || h === "코멘트" || h === "부모코멘트" || h === "compliment") commentCol = i + 1;
-      if (h === "approvedby" || h === "승인자" || h === "심의자" || h === "approver") approverCol = i + 1;
+      if (h === "compliment" || h === "parentcomment" || h === "comment" || h === "칭찬" || h === "코멘트" || h === "부모코멘트") complimentCol = i + 1;
+      if (h === "rejectreason" || h === "reject" || h === "반려사유" || h === "사유") rejectCol = i + 1;
+      if (h === "reviewedby" || h === "approvedby" || h === "승인자" || h === "심의자" || h === "approver") approverCol = i + 1;
+      if (h === "reviewedat" || h === "승인일시" || h === "심의일시") reviewedAtCol = i + 1;
       if (h === "points" || h === "point" || h === "포인트") ptsCol = i;
-      if (h === "userid" || h === "user") userCol = i;
+      if (h === "userid" || h === "user" || h === "아이디") userCol = i;
     }
     if (logIdCol === -1) logIdCol = 0;
-    if (statusCol === -1) statusCol = 6;
-    if (commentCol === -1) commentCol = (headers.length >= 9 ? 9 : lc);
-    if (approverCol === -1) approverCol = (headers.length >= 10 ? 10 : lc);
+    if (statusCol === -1) statusCol = 5;
 
     var targetLogId = String(data.logId || "").trim();
     var foundRow = -1;
@@ -624,9 +627,14 @@ function approveQuest(data) {
       return { success: false, error: "승인 대상 기록을 찾을 수 없습니다. (LogId: " + targetLogId + ")" };
     }
 
+    var tz  = Session.getScriptTimeZone();
+    var nowStr = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd HH:mm:ss");
+
     if (statusCol > 0 && statusCol <= lc) sheet.getRange(foundRow, statusCol).setValue("APPROVED");
-    if (data.comment && commentCol > 0 && commentCol <= lc) sheet.getRange(foundRow, commentCol).setValue(data.comment);
     if (approverCol > 0 && approverCol <= lc) sheet.getRange(foundRow, approverCol).setValue(data.approvedBy || "부모님");
+    if (complimentCol > 0 && complimentCol <= lc) sheet.getRange(foundRow, complimentCol).setValue(data.comment || "승인 완료! 참 잘했어요! 👏");
+    if (reviewedAtCol > 0 && reviewedAtCol <= lc) sheet.getRange(foundRow, reviewedAtCol).setValue(nowStr);
+    if (rejectCol > 0 && rejectCol <= lc) sheet.getRange(foundRow, rejectCol).setValue("");
 
     // 포인트 및 사용자 결정
     var pts = Number(data.points);
@@ -678,10 +686,18 @@ function rejectQuest(data) {
       return String(h || "").trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
     });
 
-    var logIdCol = headers.indexOf("logid") !== -1 ? headers.indexOf("logid") : 0;
-    var statusCol = headers.indexOf("status") !== -1 ? headers.indexOf("status") + 1 : 6;
-    var commentCol = headers.indexOf("parentcomment") !== -1 ? headers.indexOf("parentcomment") + 1 : 9;
-    var approverCol = headers.indexOf("approvedby") !== -1 ? headers.indexOf("approvedby") + 1 : 10;
+    var logIdCol = -1, statusCol = -1, complimentCol = -1, rejectCol = -1, approverCol = -1, reviewedAtCol = -1;
+    for (var i = 0; i < headers.length; i++) {
+      var h = headers[i];
+      if (h === "logid" || h === "id" || h === "아이디") logIdCol = i;
+      if (h === "status" || h === "상태") statusCol = i + 1;
+      if (h === "compliment" || h === "parentcomment" || h === "comment" || h === "칭찬" || h === "코멘트" || h === "부모코멘트") complimentCol = i + 1;
+      if (h === "rejectreason" || h === "reject" || h === "반려사유" || h === "사유") rejectCol = i + 1;
+      if (h === "reviewedby" || h === "approvedby" || h === "승인자" || h === "심의자" || h === "approver") approverCol = i + 1;
+      if (h === "reviewedat" || h === "승인일시" || h === "심의일시") reviewedAtCol = i + 1;
+    }
+    if (logIdCol === -1) logIdCol = 0;
+    if (statusCol === -1) statusCol = 5;
 
     var targetLogId = String(data.logId || "").trim();
     var found = -1;
@@ -702,9 +718,15 @@ function rejectQuest(data) {
     }
 
     if (found !== -1) {
-      sheet.getRange(found, statusCol).setValue("REJECTED");
-      if (data.comment) sheet.getRange(found, commentCol).setValue(data.comment);
-      sheet.getRange(found, approverCol).setValue(data.approvedBy || "부모님");
+      var tz  = Session.getScriptTimeZone();
+      var nowStr = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd HH:mm:ss");
+
+      if (statusCol > 0 && statusCol <= lc) sheet.getRange(found, statusCol).setValue("REJECTED");
+      if (approverCol > 0 && approverCol <= lc) sheet.getRange(found, approverCol).setValue(data.approvedBy || "부모님");
+      if (rejectCol > 0 && rejectCol <= lc) sheet.getRange(found, rejectCol).setValue(data.comment || data.rejectReason || "반려되었습니다.");
+      if (reviewedAtCol > 0 && reviewedAtCol <= lc) sheet.getRange(found, reviewedAtCol).setValue(nowStr);
+      if (complimentCol > 0 && complimentCol <= lc) sheet.getRange(found, complimentCol).setValue("");
+
       SpreadsheetApp.flush();
     }
 
@@ -781,30 +803,37 @@ function updateChildPoints(ss, userId, delta) {
   var data = usersSheet.getRange(1, 1, usersSheet.getLastRow(), usersSheet.getLastColumn()).getValues();
   var headers = data[0].map(function(h) { return String(h).trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, ''); });
   
-  var idCol = -1, ptCol = -1, xpCol = -1, roleCol = -1;
+  var idCol = -1, ptCol = -1, xpCol = -1, roleCol = -1, lvCol = -1;
   for (var c = 0; c < headers.length; c++) {
     var h = headers[c];
     if (h === "userid" || h === "id" || h === "아이디") idCol = c;
     if (h === "points" || h === "point" || h === "포인트" || h === "잔액") ptCol = c;
-    if (h === "totalexp" || h === "totalxp" || h === "xp" || h === "exp" || h === "경험치" || h === "총경험치") xpCol = c;
+    if (h === "currentexp" || h === "totalexp" || h === "totalxp" || h === "xp" || h === "exp" || h === "경험치" || h === "총경험치") xpCol = c;
+    if (h === "level" || h === "레벨") lvCol = c;
     if (h === "role" || h === "역할" || h === "구분") roleCol = c;
   }
   if (idCol === -1) idCol = 0;
   if (roleCol === -1) roleCol = (headers.length > 2 ? 2 : 1);
-  if (ptCol === -1) ptCol = (headers.length > 4 ? 4 : 1);
-  if (xpCol === -1) xpCol = (headers.length > 5 ? 5 : ptCol);
+  if (ptCol === -1) ptCol = (headers.length > 5 ? 5 : 1);
+  if (xpCol === -1) xpCol = (headers.length > 4 ? 4 : ptCol);
 
   for (var r = 1; r < data.length; r++) {
     var rowId = String(data[r][idCol]).trim();
     var role  = String(data[r][roleCol] || "").toUpperCase();
     if (rowId === userId || role === "CHILD" || (userId && rowId.includes(userId))) {
       var curPts = Number(data[r][ptCol]) || 0;
-      var curXp  = Number(data[r][xpCol]) || 0;
-      // If points or xp were negative due to corrupt test, reset baseline gracefully
+      var curXp  = (xpCol !== -1 && xpCol !== ptCol) ? (Number(data[r][xpCol]) || 0) : curPts;
       var newPts = Math.max(0, curPts + delta);
       var newXp  = Math.max(0, curXp + (delta > 0 ? delta : 0));
+      
       usersSheet.getRange(r + 1, ptCol + 1).setValue(newPts);
-      if (delta > 0) usersSheet.getRange(r + 1, xpCol + 1).setValue(newXp);
+      if (delta > 0 && xpCol !== -1 && xpCol !== ptCol) {
+        usersSheet.getRange(r + 1, xpCol + 1).setValue(newXp);
+      }
+      if (lvCol !== -1) {
+        var newLv = Math.min(100, Math.max(1, Math.floor(newXp / XP_PER_LEVEL) + 1));
+        usersSheet.getRange(r + 1, lvCol + 1).setValue(newLv);
+      }
       break;
     }
   }
@@ -884,4 +913,110 @@ function getFallbackData() {
     pendingReviews: [],
     inventory:      []
   };
+}
+
+// ────────────────────────────────────────────────
+// 🧹 테스트 데이터 정리 (전수 검증 후 안전 롤백)
+// ────────────────────────────────────────────────
+function cleanupTestData(data) {
+  try {
+    data = unwrapData(data);
+    var ss = getSS();
+    var deletedLogs = 0;
+    var deletedInvs = 0;
+
+    // 1. Delete test logs from QuestLogs
+    var logsSheet = ss.getSheetByName("QuestLogs");
+    if (logsSheet && logsSheet.getLastRow() >= 2) {
+      var logData = logsSheet.getRange(1, 1, logsSheet.getLastRow(), logsSheet.getLastColumn()).getValues();
+      var logHeaders = logData[0].map(function(h) { return String(h || "").trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, ''); });
+      var idCol = logHeaders.indexOf("logid") !== -1 ? logHeaders.indexOf("logid") : 0;
+      var testIds = data.testLogIds || [];
+      var deleteKeywords = data.deleteKeywords || ["TEST", "테스트"];
+      
+      for (var r = logData.length - 1; r >= 1; r--) {
+        var rowId = String(logData[r][idCol] || "").trim();
+        var rowStr = logData[r].join(" ");
+        var shouldDelete = false;
+        if (testIds.indexOf(rowId) !== -1) shouldDelete = true;
+        else if (rowId.indexOf("LOG_TEST_") === 0) shouldDelete = true;
+        else if (deleteKeywords.some(function(kw) { return rowStr.indexOf(kw) !== -1; })) shouldDelete = true;
+        
+        if (shouldDelete) {
+          logsSheet.deleteRow(r + 1);
+          deletedLogs++;
+        }
+      }
+    }
+
+    // 2. Delete test inventory from Inventory
+    var invSheet = ss.getSheetByName("Inventory");
+    if (invSheet && invSheet.getLastRow() >= 2) {
+      var invData = invSheet.getRange(1, 1, invSheet.getLastRow(), invSheet.getLastColumn()).getValues();
+      var invHeaders = invData[0].map(function(h) { return String(h || "").trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, ''); });
+      var invIdCol = invHeaders.indexOf("invid") !== -1 ? invHeaders.indexOf("invid") : 0;
+      var testInvIds = data.testInvIds || [];
+      var deleteInvKeywords = data.deleteInvKeywords || ["TEST", "테스트"];
+
+      for (var r = invData.length - 1; r >= 1; r--) {
+        var invId = String(invData[r][invIdCol] || "").trim();
+        var invStr = invData[r].join(" ");
+        var shouldDelete = false;
+        if (testInvIds.indexOf(invId) !== -1) shouldDelete = true;
+        else if (invId.indexOf("INV_TEST_") === 0) shouldDelete = true;
+        else if (deleteInvKeywords.some(function(kw) { return invStr.indexOf(kw) !== -1; })) shouldDelete = true;
+
+        if (shouldDelete) {
+          invSheet.deleteRow(r + 1);
+          deletedInvs++;
+        }
+      }
+    }
+
+    // 3. Restore child points/exp if requested
+    if (data.restorePoints !== undefined || data.restoreExp !== undefined) {
+      var usersSheet = ss.getSheetByName("Users");
+      if (usersSheet && usersSheet.getLastRow() >= 2) {
+        var uData = usersSheet.getRange(1, 1, usersSheet.getLastRow(), usersSheet.getLastColumn()).getValues();
+        var uHeaders = uData[0].map(function(h) { return String(h || "").trim().toLowerCase().replace(/[^a-z0-9가-힣]/g, ''); });
+        var ptCol = -1, xpCol = -1, lvCol = -1, roleCol = -1;
+        for (var c = 0; c < uHeaders.length; c++) {
+          var uh = uHeaders[c];
+          if (uh === "points" || uh === "point" || uh === "포인트" || uh === "잔액") ptCol = c;
+          if (uh === "currentexp" || uh === "totalexp" || uh === "xp") xpCol = c;
+          if (uh === "level" || uh === "레벨") lvCol = c;
+          if (uh === "role" || uh === "역할" || uh === "구분") roleCol = c;
+        }
+        for (var r = 1; r < uData.length; r++) {
+          var uRole = String(uData[r][roleCol] || "").toUpperCase();
+          var uId = String(uData[r][0] || "").trim();
+          if (uRole === "CHILD" || uId === "child_1") {
+            if (data.restorePoints !== undefined && ptCol !== -1) {
+              usersSheet.getRange(r + 1, ptCol + 1).setValue(Number(data.restorePoints));
+            }
+            if (data.restoreExp !== undefined && xpCol !== -1) {
+              usersSheet.getRange(r + 1, xpCol + 1).setValue(Number(data.restoreExp));
+              if (lvCol !== -1) {
+                var rLv = Math.min(100, Math.max(1, Math.floor(Number(data.restoreExp) / XP_PER_LEVEL) + 1));
+                usersSheet.getRange(r + 1, lvCol + 1).setValue(rLv);
+              }
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    SpreadsheetApp.flush();
+
+    return {
+      success: true,
+      message: "🧹 테스트 데이터 정리 완료! (로그 " + deletedLogs + "건, 인벤토리 " + deletedInvs + "건 삭제)",
+      deletedLogs: deletedLogs,
+      deletedInvs: deletedInvs,
+      appData: getAppData()
+    };
+  } catch(err) {
+    return { success: false, error: err.toString() };
+  }
 }
