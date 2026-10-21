@@ -84,7 +84,7 @@ function doPost(e) {
     else if (action === 'rejectQuest') res = rejectQuest(payload);
     else if (action === 'redeemReward') res = redeemReward(payload);
     else if (action === 'useInventoryItem') res = useInventoryItem(payload);
-    else if (action === 'cleanupTestData') res = cleanupTestData(payload);
+    // cleanupTestData는 인증 없이 행 삭제/포인트 덮어쓰기가 가능하므로 웹 엔드포인트에서 제외 (Apps Script 편집기에서 직접 실행)
   } catch(err) {
     res = { success: false, error: err.message };
   }
@@ -251,7 +251,10 @@ function getAppData() {
         }
       });
     }
-    var currentBalance = childProfile.points || totalXp;
+    // 잔액이 0인 경우에도 시트 값을 그대로 사용 (0 → totalXp로 대체되면 무한 교환 가능)
+    var childIdx = profiles.indexOf(childProfile);
+    var rawChildPts = childIdx !== -1 ? getField(users[childIdx], "points", "포인트", "잔액") : "";
+    var currentBalance = (childIdx !== -1 && rawChildPts !== "") ? childProfile.points : (childProfile.points || totalXp);
 
     var level = 1;
     if (totalXp > 0) level = Math.min(100, Math.max(1, Math.floor(totalXp / XP_PER_LEVEL) + 1));
@@ -304,6 +307,16 @@ function getAppData() {
       if (p.name.includes("아빠")) { profileMap["parent_2"] = p.name; profileMap["dad"] = p.name; }
     });
 
+    // 사진 컬럼 위치 (Base64 → Drive 마이그레이션 결과를 시트에 다시 기록하기 위함)
+    var photoColIdx = -1;
+    if (logsSheet && logsSheet.getLastColumn() > 0) {
+      var logHdrs = logsSheet.getRange(1, 1, 1, logsSheet.getLastColumn()).getValues()[0];
+      for (var hc = 0; hc < logHdrs.length; hc++) {
+        var hClean = String(logHdrs[hc] || "").replace(/[^a-zA-Z0-9가-힣]/g, "").toLowerCase();
+        if (["photourl", "photo", "photos", "사진", "인증사진"].indexOf(hClean) !== -1) { photoColIdx = hc + 1; break; }
+      }
+    }
+
     var tz = Session.getScriptTimeZone();
     var logList = logs.map(function(log) {
       var rawStatus = String(getField(log, "status", "상태") || "PENDING").trim();
@@ -314,6 +327,7 @@ function getAppData() {
 
       var rawPhoto  = String(getField(log, "photoUrl", "photo_url", "photo", "photos", "사진", "인증사진") || "").trim();
       var photoStr  = "";
+      var migrated  = false;
       if (rawPhoto) {
         var parts = [];
         if (rawPhoto.startsWith("[")) {
@@ -335,6 +349,7 @@ function getAppData() {
                 var blob  = Utilities.newBlob(Utilities.base64Decode(clean), "image/jpeg", "Migrated_" + (log.LogId || "photo") + ".jpg");
                 var file  = folder.createFile(blob);
                 try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(e) {}
+                migrated = true;
                 return file.getId();
               }
             } catch(e) {
@@ -343,6 +358,10 @@ function getAppData() {
           }
           return "";
         }).filter(Boolean).join(",");
+        // 마이그레이션된 ID를 시트에 저장하지 않으면 매 로드마다 Drive 파일이 중복 생성됨
+        if (migrated && photoColIdx > 0) {
+          try { logsSheet.getRange(log.__rowIndex, photoColIdx).setValue(photoStr); } catch(e) {}
+        }
       }
 
       var dateRaw = getField(log, "submittedAt", "completedAt", "date", "일시", "날짜", "시간");
@@ -612,19 +631,19 @@ function approveQuest(data) {
       }
     }
 
-    // 3. Fallback: If still not found, search latest PENDING row
-    if (foundRow === -1) {
-      for (var r = allValues.length - 1; r >= 1; r--) {
-        var rowText = allValues[r].join(" ");
-        if (rowText.includes("PENDING") || rowText.includes("대기")) {
-          foundRow = r + 1;
-          break;
-        }
-      }
-    }
+    // 3. Fallback: LogId 컬럼이 비어 getAppData가 만든 "LOG-<행번호>" 형태의 ID
+    if (foundRow === -1) foundRow = rowFromGeneratedLogId(targetLogId, lr);
 
     if (foundRow === -1) {
       return { success: false, error: "승인 대상 기록을 찾을 수 없습니다. (LogId: " + targetLogId + ")" };
+    }
+
+    // 이미 승인된 기록이면 포인트/티켓 중복 지급 방지
+    if (statusCol > 0 && statusCol <= lc) {
+      var curStatus = String(allValues[foundRow - 1][statusCol - 1] || "").trim();
+      if (curStatus.toUpperCase() === "APPROVED" || curStatus === "승인") {
+        return { success: true, message: "이미 승인된 퀘스트입니다.", appData: getAppData() };
+      }
     }
 
     var tz  = Session.getScriptTimeZone();
@@ -665,6 +684,14 @@ function approveQuest(data) {
   } catch(err) {
     return { success: false, error: err.toString() };
   }
+}
+
+// getAppData가 LogId 없는 행에 부여한 "LOG-<행번호>" ID → 시트 행 번호
+function rowFromGeneratedLogId(logId, lastRow) {
+  var m = String(logId || "").match(/^LOG-(\d+)$/);
+  if (!m) return -1;
+  var row = Number(m[1]);
+  return (row >= 2 && row <= lastRow) ? row : -1;
 }
 
 // ────────────────────────────────────────────────
@@ -716,6 +743,10 @@ function rejectQuest(data) {
         if (found !== -1) break;
       }
     }
+    if (found === -1) found = rowFromGeneratedLogId(targetLogId, lr);
+    if (found === -1) {
+      return { success: false, error: "반려 대상 기록을 찾을 수 없습니다. (LogId: " + targetLogId + ")" };
+    }
 
     if (found !== -1) {
       var tz  = Session.getScriptTimeZone();
@@ -743,7 +774,10 @@ function redeemReward(data) {
   try {
     var ss      = getSS();
     var appData = getAppData();
-    var cost    = Number(data.cost) || 0;
+    // 비용은 클라이언트 값이 아닌 상점 데이터 기준 (음수/조작된 cost로 포인트 증가 방지)
+    var item = (appData.shopItems || []).find(function(s) { return s.id === String(data.rewardId || "").trim(); });
+    if (!item) return { success: false, error: "존재하지 않는 보상입니다." };
+    var cost    = Math.max(0, Number(item.cost) || 0);
 
     if (appData.child.currentBalance < cost) {
       return { success: false, error: "보유 포인트가 부족합니다!" };

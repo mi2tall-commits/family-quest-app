@@ -1187,7 +1187,8 @@
       questId:      selectedQuest.id,
       title:        selectedQuest.title,
       points:       selectedQuest.points,
-      userId:       currentUser.id,
+      // 부모가 대신 완료 처리해도 포인트/티켓은 아이에게 반영
+      userId:       currentUser.role === "PARENT" ? ((appData && appData.child && appData.child.id) || "child_1") : currentUser.id,
       isParent:     currentUser.role === "PARENT",
       memo:         document.getElementById("qm-memo").value.trim(),
       photosBase64: selectedPhotos
@@ -1265,7 +1266,8 @@
     callApi("rejectQuest", {
       logId: logId, title: title, comment: comment, approvedBy: currentUser.name
     }, function(res) {
-      showToast(res.message || "❌ 반려 처리됨", 3000);
+      if (res && res.success === false) { showToast("⚠️ " + (res.error || "오류 발생"), 3500); return; }
+      showToast((res && res.message) || "❌ 반려 처리됨", 3000);
       if (res && res.appData) { appData = res.appData; renderAll(); }
     });
   }
@@ -1297,7 +1299,8 @@
     }
     if (!confirm("[" + title + "] 아이템을 사용하시겠습니까?")) return;
     callApi("useInventoryItem", { invId: invId }, function(res) {
-      showToast(res.message || "✅ 사용 완료!", 3000);
+      if (res && res.success === false) { showToast("⚠️ " + (res.error || "오류 발생"), 3500); return; }
+      showToast((res && res.message) || "✅ 사용 완료!", 3000);
       if (res && res.appData) { appData = res.appData; renderAll(); }
     });
   }
