@@ -40,17 +40,6 @@ function doGet(e) {
     try {
       if (action === 'getAppData') {
         res = getAppData();
-      } else if (action === 'debugInspect') {
-        var ss = getSS();
-        var uSheet = ss.getSheetByName("Users");
-        var lSheet = ss.getSheetByName("QuestLogs");
-        var iSheet = ss.getSheetByName("Inventory");
-        res = {
-          success: true,
-          users: uSheet ? uSheet.getDataRange().getValues() : [],
-          logs: lSheet ? lSheet.getDataRange().getValues() : [],
-          inventory: iSheet ? iSheet.getDataRange().getValues() : []
-        };
       }
     } catch(err) {
       res = { success: false, error: err.message };
@@ -84,6 +73,7 @@ function doPost(e) {
     else if (action === 'rejectQuest') res = rejectQuest(payload);
     else if (action === 'redeemReward') res = redeemReward(payload);
     else if (action === 'useInventoryItem') res = useInventoryItem(payload);
+    else if (action === 'verifyPin') res = verifyPin(payload);
     // cleanupTestData는 인증 없이 행 삭제/포인트 덮어쓰기가 가능하므로 웹 엔드포인트에서 제외 (Apps Script 편집기에서 직접 실행)
   } catch(err) {
     res = { success: false, error: err.message };
@@ -447,20 +437,8 @@ function getAppData() {
     // ── 심의 대기 목록 ──
     var pendingReviews = logList.filter(function(l) { return l.status === "PENDING"; });
 
-    // ── 부모 PIN 맵 ──
-    var parentPins = {};
-    profiles.filter(function(p) { return p.role === "PARENT"; }).forEach(function(p) {
-      if (p.pin) parentPins[p.id] = p.pin;
-      if (p.name.includes("엄마") || p.name.toLowerCase() === "mom") parentPins["mom"] = p.pin || "1121";
-      if (p.name.includes("아빠") || p.name.toLowerCase() === "dad") parentPins["dad"] = p.pin || "7590";
-    });
-    // 폴백
-    if (!parentPins["mom"]) parentPins["mom"] = "1121";
-    if (!parentPins["dad"]) parentPins["dad"] = "7590";
-
     return {
-      profiles:       profiles,
-      parentPins:     parentPins,
+      profiles:       profiles.map(function(p) { return { id: p.id, name: p.name, role: p.role, points: p.points, totalExp: p.totalExp, icon: p.icon }; }),
       child: {
         id:             childProfile.id,
         name:           childProfile.name,
@@ -489,10 +467,50 @@ function getAppData() {
 }
 
 // ────────────────────────────────────────────────
+// 부모 PIN 서버 검증. target이 "mom"/"dad"(또는 프로필 id)면 해당 부모만, 없으면 아무 부모나
+function checkParentPin(pin, target) {
+  try {
+    var input = String(pin || "").trim();
+    if (!input) return false;
+    var users = sheetToObjects(getSS().getSheetByName("Users"));
+    var parents = users.map(function(u) {
+      return {
+        id:   String(getField(u, "userId", "id", "아이디") || "").trim(),
+        name: String(getField(u, "name", "이름", "닉네임") || "").trim(),
+        role: String(getField(u, "role", "역할", "구분") || "").trim().toUpperCase(),
+        pin:  String(getField(u, "pin", "비밀번호", "비번") || "").trim()
+      };
+    }).filter(function(p) { return p.role === "PARENT" && p.pin; });
+    if (target) {
+      parents = parents.filter(function(p) {
+        if (p.id === target) return true;
+        var lname = p.name.toLowerCase();
+        if (target === "mom") return p.name.indexOf("엄마") >= 0 || lname === "mom";
+        if (target === "dad") return p.name.indexOf("아빠") >= 0 || lname === "dad";
+        return false;
+      });
+    }
+    return parents.some(function(p) { return p.pin === input; });
+  } catch(e) {
+    return false;
+  }
+}
+
+// 부모 PIN 확인 (클라이언트에는 PIN을 내려주지 않음)
+function verifyPin(data) {
+  data = unwrapData(data);
+  var ok = checkParentPin(data.pin, data.target);
+  return ok ? { success: true } : { success: false, error: "PIN 번호가 일치하지 않습니다." };
+}
+
+// ────────────────────────────────────────────────
 // 퀘스트 완료 제출
 // ────────────────────────────────────────────────
 function completeQuest(data) {
   try {
+    if (data && data.isParent && !checkParentPin(data.parentPin, data.parentTarget)) {
+      return { success: false, error: "부모 PIN 인증이 필요합니다." };
+    }
     var ss   = getSS();
     var tz   = Session.getScriptTimeZone();
     var now  = new Date();
@@ -579,6 +597,7 @@ function completeQuest(data) {
 function approveQuest(data) {
   try {
     data = unwrapData(data);
+    if (!checkParentPin(data.parentPin, data.parentTarget)) return { success: false, error: "부모 PIN 인증이 필요합니다." };
     var ss   = getSS();
     var sheet = ss.getSheetByName("QuestLogs");
     if (!sheet) return { success: false, error: "QuestLogs 시트 없음" };
@@ -700,6 +719,7 @@ function rowFromGeneratedLogId(logId, lastRow) {
 function rejectQuest(data) {
   try {
     data = unwrapData(data);
+    if (!checkParentPin(data.parentPin, data.parentTarget)) return { success: false, error: "부모 PIN 인증이 필요합니다." };
     var ss    = getSS();
     var sheet = ss.getSheetByName("QuestLogs");
     if (!sheet) return { success: false, error: "QuestLogs 시트 없음" };
@@ -929,11 +949,10 @@ function getDefaultShopItems() {
 function getFallbackData() {
   return {
     profiles:   [
-      { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  pin: "",     points: 7400, totalExp: 7400, icon: "🧒" },
-      { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", pin: "1121", points: 0,    totalExp: 0,    icon: "👩" },
-      { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", pin: "7590", points: 0,    totalExp: 0,    icon: "👨" }
+      { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  points: 7400, totalExp: 7400, icon: "🧒" },
+      { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", points: 0,    totalExp: 0,    icon: "👩" },
+      { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", points: 0,    totalExp: 0,    icon: "👨" }
     ],
-    parentPins: { mom: "1121", dad: "7590" },
     child: {
       id: "child_1", name: "상급종합빡빡이(용사)", icon: "🧒",
       level: 3, title: "⭐ 든든한 퀘스트 챔피언",

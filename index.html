@@ -709,6 +709,8 @@
   var selectedPhotos  = []; // base64 array
   var pinTarget       = "mom";
   var pinAfterSuccess = null; // callback after PIN success
+  var parentPin       = ""; // 서버 검증된 부모 PIN (메모리에만 보관)
+  var parentTarget    = "";
 
   // ─── Universal API Caller (GAS RPC + GitHub Pages Fetch) ────────
   function callApi(action, payload, onSuccess, onError) {
@@ -723,6 +725,7 @@
       else if (action === "rejectQuest") runner.rejectQuest(payload);
       else if (action === "redeemReward") runner.redeemReward(payload);
       else if (action === "useInventoryItem") runner.useInventoryItem(payload);
+      else if (action === "verifyPin") runner.verifyPin(payload);
       return;
     }
 
@@ -870,13 +873,13 @@
       var catColor = cat === "주간" ? "bg-violet-500/20 text-violet-300 border border-violet-500/50"
                    : cat === "특별" ? "bg-rose-500/20 text-rose-300 border border-rose-500/50"
                    : "bg-blue-500/20 text-blue-300 border border-blue-500/50";
-      return '<div onclick="openQuestModal(\'' + esc(q.id) + '\')" class="tap card p-4 flex items-center justify-between hover:border-indigo-200 transition-colors">' +
+      return '<div onclick="openQuestModal(' + jsArg(q.id) + ')" class="tap card p-4 flex items-center justify-between hover:border-indigo-200 transition-colors">' +
         '<div class="flex items-center gap-3 min-w-0">' +
-          '<span class="text-2xl flex-shrink-0">' + (q.icon || "⭐") + '</span>' +
+          '<span class="text-2xl flex-shrink-0">' + esc(q.icon || "⭐") + '</span>' +
           '<div class="min-w-0">' +
             '<div class="flex items-center gap-1.5 flex-wrap">' +
               '<h4 class="font-extrabold text-sm text-white">' + esc(q.title) + '</h4>' +
-              '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded ' + catColor + '">' + cat + '</span>' +
+              '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded ' + catColor + '">' + esc(cat) + '</span>' +
             '</div>' +
             (q.desc ? '<p class="text-xs text-slate-400 mt-0.5 truncate">' + esc(q.desc) + '</p>' : '') +
           '</div>' +
@@ -902,12 +905,12 @@
     container.innerHTML = items.map(function(item) {
       var canBuy = balance >= item.cost;
       return '<div class="card p-4 flex items-center gap-3">' +
-        '<span class="text-3xl flex-shrink-0">' + (item.icon || "🎁") + '</span>' +
+        '<span class="text-3xl flex-shrink-0">' + esc(item.icon || "🎁") + '</span>' +
         '<div class="flex-1 min-w-0">' +
           '<h4 class="font-extrabold text-sm text-white">' + esc(item.title) + '</h4>' +
           (item.desc ? '<p class="text-xs text-slate-400 mt-0.5">' + esc(item.desc) + '</p>' : '') +
         '</div>' +
-        '<button type="button" onclick="redeemAction(\'' + esc(item.id) + '\',\'' + esc(item.title) + '\',' + item.cost + ',\'' + esc(item.icon||'🎁') + '\')" ' +
+        '<button type="button" onclick="redeemAction(' + jsArg(item.id) + ',' + jsArg(item.title) + ',' + (Number(item.cost) || 0) + ',' + jsArg(item.icon||'🎁') + ')" ' +
           'class="tap flex-shrink-0 px-3 py-2 rounded-xl text-xs font-extrabold shadow-sm ' +
           (canBuy ? 'shop-btn-can-buy' : 'shop-btn-disabled') + '">' +
           num(item.cost) + ' P 교환' +
@@ -934,14 +937,14 @@
       var badgeCls = used ? "badge-used" : "badge-active";
       var badgeTxt = used ? "사용됨" : "사용 가능";
       return '<div class="card p-4 flex items-center gap-3 ' + (used ? "opacity-60" : "") + '">' +
-        '<span class="text-3xl flex-shrink-0">' + (item.icon || "🎁") + '</span>' +
+        '<span class="text-3xl flex-shrink-0">' + esc(item.icon || "🎁") + '</span>' +
         '<div class="flex-1 min-w-0">' +
           '<h4 class="font-extrabold text-sm text-white">' + esc(item.rewardTitle) + '</h4>' +
-          '<p class="text-xs text-slate-400 mt-0.5">획득: ' + (item.acquiredAt || "") + '</p>' +
+          '<p class="text-xs text-slate-400 mt-0.5">획득: ' + esc(item.acquiredAt || "") + '</p>' +
         '</div>' +
         '<div class="flex flex-col items-end gap-1.5">' +
           '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full ' + badgeCls + '">' + badgeTxt + '</span>' +
-          (!used ? '<button type="button" onclick="useItemAction(\'' + item.id + '\',\'' + esc(item.rewardTitle) + '\')" class="tap inv-use-btn">사용하기</button>' : '') +
+          (!used ? '<button type="button" onclick="useItemAction(' + jsArg(item.id) + ',' + jsArg(item.rewardTitle) + ')" class="tap inv-use-btn">사용하기</button>' : '') +
         '</div>' +
       '</div>';
     }).join("");
@@ -986,8 +989,8 @@
             var fid = extractId(p);
             var src = fid ? "https://lh3.googleusercontent.com/d/" + fid : p;
             return '<div class="photo-slot">' +
-              '<img src="' + src + '" referrerpolicy="no-referrer" loading="lazy" ' +
-              'onclick="openPhotoViewer(\'' + src + '\')" ' +
+              '<img src="' + esc(src) + '" referrerpolicy="no-referrer" loading="lazy" ' +
+              'onclick="openPhotoViewer(' + jsArg(src) + ')" ' +
               'onerror="if(!this.dataset.retried && \'' + fid + '\'){this.dataset.retried=\'1\';this.src=\'https://drive.google.com/thumbnail?id=' + fid + '&sz=w800\';}else{this.parentElement.style.display=\'none\';}" class="cursor-pointer">' +
             '</div>';
           }).join("") +
@@ -1002,7 +1005,7 @@
             '<span class="text-xs font-black text-emerald-600">+' + num(points) + ' P</span>' +
           '</div>' +
         '</div>' +
-        (log.date ? '<p class="text-[11px] text-slate-400 font-medium">📅 ' + log.date + '</p>' : '') +
+        (log.date ? '<p class="text-[11px] text-slate-400 font-medium">📅 ' + esc(log.date) + '</p>' : '') +
         (log.memo ? '<div class="cyber-memo-box"><strong>💬 소감:</strong> ' + esc(log.memo) + '</div>' : '') +
         photosHtml +
         (log.parentComment ? (isRejected ? '<div class="cyber-reject-box"><strong>❌ ' + esc(log.approvedBy || "부모님") + '의 반려 사유:</strong> ' + esc(log.parentComment) + '</div>' : '<div class="cyber-praise-box"><strong>👑 ' + esc(log.approvedBy || "부모님") + '의 칭찬:</strong> ' + esc(log.parentComment) + '</div>') : '') +
@@ -1058,8 +1061,8 @@
             var fid = extractId(p);
             var src = fid ? "https://lh3.googleusercontent.com/d/" + fid : p;
             return '<div class="photo-slot">' +
-              '<img src="' + src + '" referrerpolicy="no-referrer" loading="lazy" ' +
-              'onclick="openPhotoViewer(\'' + src + '\')" ' +
+              '<img src="' + esc(src) + '" referrerpolicy="no-referrer" loading="lazy" ' +
+              'onclick="openPhotoViewer(' + jsArg(src) + ')" ' +
               'onerror="if(!this.dataset.retried && \'' + fid + '\'){this.dataset.retried=\'1\';this.src=\'https://drive.google.com/thumbnail?id=' + fid + '&sz=w800\';}else{this.parentElement.style.display=\'none\';}" class="cursor-pointer">' +
             '</div>';
           }).join("") +
@@ -1073,15 +1076,15 @@
         '</div>' +
         '<div>' +
           '<h4 class="text-sm font-extrabold text-white">' + esc(title) + '</h4>' +
-          (log.date ? '<p class="text-[11px] text-slate-400 mt-0.5">📅 ' + log.date + '</p>' : '') +
+          (log.date ? '<p class="text-[11px] text-slate-400 mt-0.5">📅 ' + esc(log.date) + '</p>' : '') +
         '</div>' +
         (log.memo ? '<div class="bg-slate-50 rounded-xl p-2.5 text-xs text-slate-700 border border-slate-100"><strong>💬 아이 소감:</strong> ' + esc(log.memo) + '</div>' : '') +
         (photosHtml ? '<div>' + photosHtml + '</div>' : '') +
         '<div class="space-y-2">' +
-          '<input type="text" id="comment-' + log.id + '" placeholder="칭찬 한마디를 입력해주세요! (예: 정말 잘했어! 👏)" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50">' +
+          '<input type="text" id="comment-' + esc(log.id) + '" placeholder="칭찬 한마디를 입력해주세요! (예: 정말 잘했어! 👏)" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-slate-50">' +
           '<div class="flex gap-2">' +
-            '<button type="button" onclick="rejectAction(\'' + log.id + '\',\'' + esc(title) + '\',' + points + ',\'' + (log.userId || "child_1") + '\')" class="tap flex-1 py-2.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold">❌ 반려</button>' +
-            '<button type="button" onclick="approveAction(\'' + log.id + '\',\'' + esc(title) + '\',' + points + ',\'' + (log.userId || "child_1") + '\')" class="tap flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-extrabold shadow-sm shadow-emerald-600/20">✅ 승인 (+' + num(points) + ' P)</button>' +
+            '<button type="button" onclick="rejectAction(' + jsArg(log.id) + ',' + jsArg(title) + ',' + (Number(points) || 0) + ',' + jsArg(log.userId || "child_1") + ')" class="tap flex-1 py-2.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold">❌ 반려</button>' +
+            '<button type="button" onclick="approveAction(' + jsArg(log.id) + ',' + jsArg(title) + ',' + (Number(points) || 0) + ',' + jsArg(log.userId || "child_1") + ')" class="tap flex-1 py-2.5 bg-emerald-600 text-white rounded-xl text-xs font-extrabold shadow-sm shadow-emerald-600/20">✅ 승인 (+' + num(points) + ' P)</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -1191,7 +1194,9 @@
       userId:       currentUser.role === "PARENT" ? ((appData && appData.child && appData.child.id) || "child_1") : currentUser.id,
       isParent:     currentUser.role === "PARENT",
       memo:         document.getElementById("qm-memo").value.trim(),
-      photosBase64: selectedPhotos
+      photosBase64: selectedPhotos,
+      parentPin:    parentPin,
+      parentTarget: parentTarget
     };
 
     callApi("completeQuest", payload, function(res) {
@@ -1244,7 +1249,8 @@
 
     callApi("approveQuest", {
       logId: logId, title: title, points: pts, userId: userId,
-      comment: comment, approvedBy: currentUser.name
+      comment: comment, approvedBy: currentUser.name,
+      parentPin: parentPin, parentTarget: parentTarget
     }, function(res) {
       if (res && res.success) {
         if (res.appData) {
@@ -1264,7 +1270,8 @@
     if (!confirm("[" + title + "] 퀘스트를 반려하시겠습니까?")) return;
     var comment = (document.getElementById("comment-" + logId) || {}).value || "";
     callApi("rejectQuest", {
-      logId: logId, title: title, comment: comment, approvedBy: currentUser.name
+      logId: logId, title: title, comment: comment, approvedBy: currentUser.name,
+      parentPin: parentPin, parentTarget: parentTarget
     }, function(res) {
       if (res && res.success === false) { showToast("⚠️ " + (res.error || "오류 발생"), 3500); return; }
       showToast((res && res.message) || "❌ 반려 처리됨", 3000);
@@ -1356,27 +1363,33 @@
 
   function verifyPin() {
     var pin  = document.getElementById("pin-input").value.trim();
-    var pins = (appData && appData.parentPins) ? appData.parentPins : { mom: "1121", dad: "7590" };
-    var expected = pins[pinTarget] || (pinTarget === "mom" ? "1121" : "7590");
-
-    if (pin === expected) {
-      // Set current user as parent
-      var prof = (appData && appData.profiles) ? appData.profiles.find(function(p) {
-        return p.id === pinTarget || p.name.includes(pinTarget === "mom" ? "엄마" : "아빠");
-      }) : null;
-      currentUser = {
-        id:   pinTarget,
-        name: prof ? prof.name : (pinTarget === "mom" ? "엄마" : "아빠"),
-        role: "PARENT",
-        icon: pinTarget === "mom" ? "👩" : "👨"
-      };
-      renderHeader();
-      closePinModal();
-      if (pinAfterSuccess) { pinAfterSuccess(); pinAfterSuccess = null; }
-    } else {
+    var fail = function() {
       document.getElementById("pin-error").classList.remove("hidden");
       document.getElementById("pin-input").value = "";
-    }
+    };
+    if (!pin) { fail(); return; }
+
+    callApi("verifyPin", { pin: pin, target: pinTarget }, function(res) {
+      if (res && res.success) {
+        parentPin    = pin;
+        parentTarget = pinTarget;
+        // Set current user as parent
+        var prof = (appData && appData.profiles) ? appData.profiles.find(function(p) {
+          return p.id === pinTarget || p.name.includes(pinTarget === "mom" ? "엄마" : "아빠");
+        }) : null;
+        currentUser = {
+          id:   pinTarget,
+          name: prof ? prof.name : (pinTarget === "mom" ? "엄마" : "아빠"),
+          role: "PARENT",
+          icon: pinTarget === "mom" ? "👩" : "👨"
+        };
+        renderHeader();
+        closePinModal();
+        if (pinAfterSuccess) { pinAfterSuccess(); pinAfterSuccess = null; }
+      } else {
+        fail();
+      }
+    }, function() { fail(); });
   }
 
   // ─── Profile Modal ───────────────────────────────────────────────
@@ -1407,9 +1420,9 @@
 
     container.innerHTML = profiles.map(function(p) {
       var isParent = p.role === "PARENT";
-      return '<button type="button" onclick="selectProfile(\'' + p.id + '\')" class="tap w-full p-3.5 rounded-2xl border border-slate-200 flex items-center justify-between hover:bg-slate-50">' +
+      return '<button type="button" onclick="selectProfile(' + jsArg(p.id) + ')" class="tap w-full p-3.5 rounded-2xl border border-slate-200 flex items-center justify-between hover:bg-slate-50">' +
         '<div class="flex items-center gap-3">' +
-          '<span class="text-2xl">' + (p.icon || "🧒") + '</span>' +
+          '<span class="text-2xl">' + esc(p.icon || "🧒") + '</span>' +
           '<div class="text-left">' +
             '<p class="text-sm font-extrabold text-white">' + esc(p.name) + '</p>' +
             '<p class="text-[11px] text-slate-400">' + (isParent ? "부모 모드 (심의 & 승인)" : "아이 모드 (퀘스트 수행)") + '</p>' +
@@ -1436,6 +1449,7 @@
       };
       openPinModal();
     } else {
+      parentPin = ""; parentTarget = "";
       currentUser = { id: prof.id, name: prof.name, role: "CHILD", icon: prof.icon || "🧒" };
       renderHeader();
       switchTab("quests");
@@ -1472,6 +1486,9 @@
   // ─── Helpers ─────────────────────────────────────────────────────
   function num(n) { return Number(n || 0).toLocaleString("ko-KR"); }
 
+  // onclick 등 HTML 속성 안의 JS 문자열 인자용 (JSON 문자열 → HTML 이스케이프)
+  function jsArg(s) { return esc(JSON.stringify(String(s == null ? "" : s))); }
+
   function esc(s) {
     return String(s || "")
       .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -1503,10 +1520,9 @@
     return {
       profiles: [
         { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  icon: "🧒", points: 7400, totalExp: 7400 },
-        { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", icon: "👩", pin: "1121" },
-        { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", icon: "👨", pin: "7590" }
+        { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", icon: "👩" },
+        { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", icon: "👨" }
       ],
-      parentPins: { mom: "1121", dad: "7590" },
       child: {
         id: "child_1", name: "상급종합빡빡이(용사)", icon: "🧒",
         level: 3, title: "⭐ 든든한 퀘스트 챔피언",
