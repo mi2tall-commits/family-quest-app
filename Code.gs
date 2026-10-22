@@ -40,17 +40,6 @@ function doGet(e) {
     try {
       if (action === 'getAppData') {
         res = getAppData();
-      } else if (action === 'debugInspect') {
-        var ss = getSS();
-        var uSheet = ss.getSheetByName("Users");
-        var lSheet = ss.getSheetByName("QuestLogs");
-        var iSheet = ss.getSheetByName("Inventory");
-        res = {
-          success: true,
-          users: uSheet ? uSheet.getDataRange().getValues() : [],
-          logs: lSheet ? lSheet.getDataRange().getValues() : [],
-          inventory: iSheet ? iSheet.getDataRange().getValues() : []
-        };
       }
     } catch(err) {
       res = { success: false, error: err.message };
@@ -84,7 +73,8 @@ function doPost(e) {
     else if (action === 'rejectQuest') res = rejectQuest(payload);
     else if (action === 'redeemReward') res = redeemReward(payload);
     else if (action === 'useInventoryItem') res = useInventoryItem(payload);
-    else if (action === 'cleanupTestData') res = cleanupTestData(payload);
+    else if (action === 'verifyPin') res = verifyPin(payload);
+    // cleanupTestData는 인증 없이 행 삭제/포인트 덮어쓰기가 가능하므로 웹 엔드포인트에서 제외 (Apps Script 편집기에서 직접 실행)
   } catch(err) {
     res = { success: false, error: err.message };
   }
@@ -251,7 +241,10 @@ function getAppData() {
         }
       });
     }
-    var currentBalance = childProfile.points || totalXp;
+    // 잔액이 0인 경우에도 시트 값을 그대로 사용 (0 → totalXp로 대체되면 무한 교환 가능)
+    var childIdx = profiles.indexOf(childProfile);
+    var rawChildPts = childIdx !== -1 ? getField(users[childIdx], "points", "포인트", "잔액") : "";
+    var currentBalance = (childIdx !== -1 && rawChildPts !== "") ? childProfile.points : (childProfile.points || totalXp);
 
     var level = 1;
     if (totalXp > 0) level = Math.min(100, Math.max(1, Math.floor(totalXp / XP_PER_LEVEL) + 1));
@@ -304,6 +297,16 @@ function getAppData() {
       if (p.name.includes("아빠")) { profileMap["parent_2"] = p.name; profileMap["dad"] = p.name; }
     });
 
+    // 사진 컬럼 위치 (Base64 → Drive 마이그레이션 결과를 시트에 다시 기록하기 위함)
+    var photoColIdx = -1;
+    if (logsSheet && logsSheet.getLastColumn() > 0) {
+      var logHdrs = logsSheet.getRange(1, 1, 1, logsSheet.getLastColumn()).getValues()[0];
+      for (var hc = 0; hc < logHdrs.length; hc++) {
+        var hClean = String(logHdrs[hc] || "").replace(/[^a-zA-Z0-9가-힣]/g, "").toLowerCase();
+        if (["photourl", "photo", "photos", "사진", "인증사진"].indexOf(hClean) !== -1) { photoColIdx = hc + 1; break; }
+      }
+    }
+
     var tz = Session.getScriptTimeZone();
     var logList = logs.map(function(log) {
       var rawStatus = String(getField(log, "status", "상태") || "PENDING").trim();
@@ -314,6 +317,7 @@ function getAppData() {
 
       var rawPhoto  = String(getField(log, "photoUrl", "photo_url", "photo", "photos", "사진", "인증사진") || "").trim();
       var photoStr  = "";
+      var migrated  = false;
       if (rawPhoto) {
         var parts = [];
         if (rawPhoto.startsWith("[")) {
@@ -335,6 +339,7 @@ function getAppData() {
                 var blob  = Utilities.newBlob(Utilities.base64Decode(clean), "image/jpeg", "Migrated_" + (log.LogId || "photo") + ".jpg");
                 var file  = folder.createFile(blob);
                 try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch(e) {}
+                migrated = true;
                 return file.getId();
               }
             } catch(e) {
@@ -343,6 +348,10 @@ function getAppData() {
           }
           return "";
         }).filter(Boolean).join(",");
+        // 마이그레이션된 ID를 시트에 저장하지 않으면 매 로드마다 Drive 파일이 중복 생성됨
+        if (migrated && photoColIdx > 0) {
+          try { logsSheet.getRange(log.__rowIndex, photoColIdx).setValue(photoStr); } catch(e) {}
+        }
       }
 
       var dateRaw = getField(log, "submittedAt", "completedAt", "date", "일시", "날짜", "시간");
@@ -428,20 +437,8 @@ function getAppData() {
     // ── 심의 대기 목록 ──
     var pendingReviews = logList.filter(function(l) { return l.status === "PENDING"; });
 
-    // ── 부모 PIN 맵 ──
-    var parentPins = {};
-    profiles.filter(function(p) { return p.role === "PARENT"; }).forEach(function(p) {
-      if (p.pin) parentPins[p.id] = p.pin;
-      if (p.name.includes("엄마") || p.name.toLowerCase() === "mom") parentPins["mom"] = p.pin || "1121";
-      if (p.name.includes("아빠") || p.name.toLowerCase() === "dad") parentPins["dad"] = p.pin || "7590";
-    });
-    // 폴백
-    if (!parentPins["mom"]) parentPins["mom"] = "1121";
-    if (!parentPins["dad"]) parentPins["dad"] = "7590";
-
     return {
-      profiles:       profiles,
-      parentPins:     parentPins,
+      profiles:       profiles.map(function(p) { return { id: p.id, name: p.name, role: p.role, points: p.points, totalExp: p.totalExp, icon: p.icon }; }),
       child: {
         id:             childProfile.id,
         name:           childProfile.name,
@@ -470,10 +467,50 @@ function getAppData() {
 }
 
 // ────────────────────────────────────────────────
+// 부모 PIN 서버 검증. target이 "mom"/"dad"(또는 프로필 id)면 해당 부모만, 없으면 아무 부모나
+function checkParentPin(pin, target) {
+  try {
+    var input = String(pin || "").trim();
+    if (!input) return false;
+    var users = sheetToObjects(getSS().getSheetByName("Users"));
+    var parents = users.map(function(u) {
+      return {
+        id:   String(getField(u, "userId", "id", "아이디") || "").trim(),
+        name: String(getField(u, "name", "이름", "닉네임") || "").trim(),
+        role: String(getField(u, "role", "역할", "구분") || "").trim().toUpperCase(),
+        pin:  String(getField(u, "pin", "비밀번호", "비번") || "").trim()
+      };
+    }).filter(function(p) { return p.role === "PARENT" && p.pin; });
+    if (target) {
+      parents = parents.filter(function(p) {
+        if (p.id === target) return true;
+        var lname = p.name.toLowerCase();
+        if (target === "mom") return p.name.indexOf("엄마") >= 0 || lname === "mom";
+        if (target === "dad") return p.name.indexOf("아빠") >= 0 || lname === "dad";
+        return false;
+      });
+    }
+    return parents.some(function(p) { return p.pin === input; });
+  } catch(e) {
+    return false;
+  }
+}
+
+// 부모 PIN 확인 (클라이언트에는 PIN을 내려주지 않음)
+function verifyPin(data) {
+  data = unwrapData(data);
+  var ok = checkParentPin(data.pin, data.target);
+  return ok ? { success: true } : { success: false, error: "PIN 번호가 일치하지 않습니다." };
+}
+
+// ────────────────────────────────────────────────
 // 퀘스트 완료 제출
 // ────────────────────────────────────────────────
 function completeQuest(data) {
   try {
+    if (data && data.isParent && !checkParentPin(data.parentPin, data.parentTarget)) {
+      return { success: false, error: "부모 PIN 인증이 필요합니다." };
+    }
     var ss   = getSS();
     var tz   = Session.getScriptTimeZone();
     var now  = new Date();
@@ -560,6 +597,7 @@ function completeQuest(data) {
 function approveQuest(data) {
   try {
     data = unwrapData(data);
+    if (!checkParentPin(data.parentPin, data.parentTarget)) return { success: false, error: "부모 PIN 인증이 필요합니다." };
     var ss   = getSS();
     var sheet = ss.getSheetByName("QuestLogs");
     if (!sheet) return { success: false, error: "QuestLogs 시트 없음" };
@@ -612,19 +650,19 @@ function approveQuest(data) {
       }
     }
 
-    // 3. Fallback: If still not found, search latest PENDING row
-    if (foundRow === -1) {
-      for (var r = allValues.length - 1; r >= 1; r--) {
-        var rowText = allValues[r].join(" ");
-        if (rowText.includes("PENDING") || rowText.includes("대기")) {
-          foundRow = r + 1;
-          break;
-        }
-      }
-    }
+    // 3. Fallback: LogId 컬럼이 비어 getAppData가 만든 "LOG-<행번호>" 형태의 ID
+    if (foundRow === -1) foundRow = rowFromGeneratedLogId(targetLogId, lr);
 
     if (foundRow === -1) {
       return { success: false, error: "승인 대상 기록을 찾을 수 없습니다. (LogId: " + targetLogId + ")" };
+    }
+
+    // 이미 승인된 기록이면 포인트/티켓 중복 지급 방지
+    if (statusCol > 0 && statusCol <= lc) {
+      var curStatus = String(allValues[foundRow - 1][statusCol - 1] || "").trim();
+      if (curStatus.toUpperCase() === "APPROVED" || curStatus === "승인") {
+        return { success: true, message: "이미 승인된 퀘스트입니다.", appData: getAppData() };
+      }
     }
 
     var tz  = Session.getScriptTimeZone();
@@ -667,12 +705,21 @@ function approveQuest(data) {
   }
 }
 
+// getAppData가 LogId 없는 행에 부여한 "LOG-<행번호>" ID → 시트 행 번호
+function rowFromGeneratedLogId(logId, lastRow) {
+  var m = String(logId || "").match(/^LOG-(\d+)$/);
+  if (!m) return -1;
+  var row = Number(m[1]);
+  return (row >= 2 && row <= lastRow) ? row : -1;
+}
+
 // ────────────────────────────────────────────────
 // 퀘스트 반려
 // ────────────────────────────────────────────────
 function rejectQuest(data) {
   try {
     data = unwrapData(data);
+    if (!checkParentPin(data.parentPin, data.parentTarget)) return { success: false, error: "부모 PIN 인증이 필요합니다." };
     var ss    = getSS();
     var sheet = ss.getSheetByName("QuestLogs");
     if (!sheet) return { success: false, error: "QuestLogs 시트 없음" };
@@ -716,6 +763,10 @@ function rejectQuest(data) {
         if (found !== -1) break;
       }
     }
+    if (found === -1) found = rowFromGeneratedLogId(targetLogId, lr);
+    if (found === -1) {
+      return { success: false, error: "반려 대상 기록을 찾을 수 없습니다. (LogId: " + targetLogId + ")" };
+    }
 
     if (found !== -1) {
       var tz  = Session.getScriptTimeZone();
@@ -743,7 +794,10 @@ function redeemReward(data) {
   try {
     var ss      = getSS();
     var appData = getAppData();
-    var cost    = Number(data.cost) || 0;
+    // 비용은 클라이언트 값이 아닌 상점 데이터 기준 (음수/조작된 cost로 포인트 증가 방지)
+    var item = (appData.shopItems || []).find(function(s) { return s.id === String(data.rewardId || "").trim(); });
+    if (!item) return { success: false, error: "존재하지 않는 보상입니다." };
+    var cost    = Math.max(0, Number(item.cost) || 0);
 
     if (appData.child.currentBalance < cost) {
       return { success: false, error: "보유 포인트가 부족합니다!" };
@@ -895,11 +949,10 @@ function getDefaultShopItems() {
 function getFallbackData() {
   return {
     profiles:   [
-      { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  pin: "",     points: 7400, totalExp: 7400, icon: "🧒" },
-      { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", pin: "1121", points: 0,    totalExp: 0,    icon: "👩" },
-      { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", pin: "7590", points: 0,    totalExp: 0,    icon: "👨" }
+      { id: "child_1", name: "상급종합빡빡이(용사)", role: "CHILD",  points: 7400, totalExp: 7400, icon: "🧒" },
+      { id: "mom",     name: "엄마 (길드마스터)",    role: "PARENT", points: 0,    totalExp: 0,    icon: "👩" },
+      { id: "dad",     name: "아빠 (대마법사)",      role: "PARENT", points: 0,    totalExp: 0,    icon: "👨" }
     ],
-    parentPins: { mom: "1121", dad: "7590" },
     child: {
       id: "child_1", name: "상급종합빡빡이(용사)", icon: "🧒",
       level: 3, title: "⭐ 든든한 퀘스트 챔피언",
